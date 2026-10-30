@@ -56,7 +56,9 @@ async def serve_bootstrap(request: Request):
         raise HTTPException(status_code=404, detail="Bootstrap payload not found")
 
     content = CLIENT_SCRIPT_PATH.read_text(encoding="utf-8-sig").lstrip("\ufeff")
-    base_url = str(request.base_url).rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.netloc)
+    base_url = f"{proto}://{host}".rstrip("/")
     session_token = SecurityManager.generate_session_token()
 
     # Inject URL and Token into script parameters
