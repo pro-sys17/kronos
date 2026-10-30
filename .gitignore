@@ -1,0 +1,17 @@
+# Environment and secrets
+.env
+*.env
+.env.*
+!.env.example
+
+# Python caches and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+
+# Temp snapshots and logs
+kronos_backups/
+*.log
