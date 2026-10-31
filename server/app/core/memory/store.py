@@ -77,6 +77,18 @@ class MemoryStore:
                 summary TEXT
             )
             """)
+
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS chat_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                session_token TEXT,
+                user_message TEXT,
+                ai_summary TEXT,
+                intent TEXT,
+                actions_count INTEGER DEFAULT 0
+            )
+            """)
             conn.commit()
 
     @classmethod
@@ -144,6 +156,42 @@ class MemoryStore:
             conn.commit()
 
     @classmethod
+    def save_chat_turn(cls, session_token: str, user_message: str, ai_summary: str,
+                       intent: str = "unknown", actions_count: int = 0):
+        """
+        Saves each chat turn (user question + AI response summary) to persistent history.
+        Only stores sanitized, non-sensitive content.
+        """
+        cls.initialize()
+        clean_msg = cls.sanitize_text(user_message)[:500]
+        clean_summary = cls.sanitize_text(ai_summary)[:1000]
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        with cls._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            INSERT INTO chat_sessions (timestamp, session_token, user_message, ai_summary, intent, actions_count)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """, (now_iso, session_token or "default", clean_msg, clean_summary, intent, actions_count))
+            conn.commit()
+
+    @classmethod
+    def get_chat_history(cls, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        Returns recent chat turns across all sessions for TUI memory dashboard.
+        """
+        cls.initialize()
+        with cls._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+            SELECT id, timestamp, session_token, user_message, ai_summary, intent, actions_count
+            FROM chat_sessions
+            ORDER BY id DESC LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    @classmethod
     def get_recent_history(cls, limit: int = 3) -> List[Dict[str, Any]]:
         cls.initialize()
         with cls._get_connection() as conn:
@@ -163,6 +211,7 @@ class MemoryStore:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM troubleshooting_history")
             cursor.execute("DELETE FROM session_summaries")
+            cursor.execute("DELETE FROM chat_sessions")
             cursor.execute("DELETE FROM system_profiles")
             conn.commit()
 

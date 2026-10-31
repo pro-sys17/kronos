@@ -60,13 +60,16 @@ async def list_tools():
 @router.get("/api/v1/memory")
 async def get_memory_summary():
     """
-    Returns non-sensitive persistent troubleshooting memory and profile summary.
+    Returns non-sensitive persistent troubleshooting memory, recent chat summaries, and host profile.
     """
     from app.core.memory.store import MemoryStore
-    recent = MemoryStore.get_recent_history(limit=5)
+    recent_episodes = MemoryStore.get_recent_history(limit=10)
+    recent_chats = MemoryStore.get_chat_history(limit=20)
+    profile = MemoryStore.get_latest_profile()
     return {
         "status": "SUCCESS",
-        "recent_troubleshooting_count": len(recent),
+        "profile": profile,
+        "recent_troubleshooting_count": len(recent_episodes),
         "recent_episodes": [
             {
                 "issue_summary": ep.get("issue_summary", ""),
@@ -75,7 +78,19 @@ async def get_memory_summary():
                 "outcome": ep.get("outcome", ""),
                 "timestamp": ep.get("timestamp", "")
             }
-            for ep in recent
+            for ep in recent_episodes
+        ],
+        "recent_chats_count": len(recent_chats),
+        "recent_chats": [
+            {
+                "id": c.get("id"),
+                "timestamp": c.get("timestamp", ""),
+                "user_message": c.get("user_message", ""),
+                "ai_summary": c.get("ai_summary", ""),
+                "intent": c.get("intent", ""),
+                "actions_count": c.get("actions_count", 0)
+            }
+            for c in recent_chats
         ]
     }
 
@@ -139,6 +154,7 @@ async def diagnose_problem(req: DiagnoseRequest, request: Request, x_session_tok
         req.problem,
         telemetry_data,
         history=req.history,
-        last_output=req.last_output
+        last_output=req.last_output,
+        session_token=token
     )
     return verdict

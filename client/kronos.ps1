@@ -1661,6 +1661,158 @@ function Show-MatrixScreensaverTUI {
     }
 }
 
+function Show-MemoryDashboardTUI {
+    Clear-Host
+    while ($true) {
+        Write-Host "$ESC[H" -NoNewline
+        $nowTime = (Get-Date).ToString("HH:mm:ss")
+
+        # Fetch memory from server
+        $memData = $null
+        try {
+            $headers = @{ "X-Session-Token" = $SessionToken }
+            $memData = Invoke-RestMethod -Uri "$ServerUrl/api/v1/memory" -Method Get -Headers $headers -TimeoutSec 5 -ErrorAction Stop
+        } catch {
+            $memData = $null
+        }
+
+        Write-Host ""
+        Write-Host " ${CLR_SYS_BORDER}╭─ [MEMORY] KRONOS PERSISTENT MEMORY & CHAT ARCHIVE ${CLR_CYAN}● LIVE [$nowTime] ${CLR_SYS_BORDER}─────────${CLR_RESET}"
+        Write-Host " ${CLR_SYS_BORDER}│${CLR_RESET}"
+
+        if ($memData -and $memData.profile) {
+            $p = $memData.profile
+            $pHost = if ($p.hostname) { $p.hostname } else { $env:COMPUTERNAME }
+            $pOS = if ($p.os_caption) { $p.os_caption } else { "Microsoft Windows" }
+            $pRAM = if ($p.total_ram_gb) { "$($p.total_ram_gb) GB" } else { "16 GB" }
+            $pDrives = if ($p.drives) { $p.drives } else { "C:" }
+            Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}HOST PROFILE : ${CLR_CYAN}$pHost ${CLR_DARK}│ ${CLR_WHITE}$pOS ${CLR_DARK}│ ${CLR_MUTED}RAM: ${CLR_TEXT}$pRAM ${CLR_DARK}│ ${CLR_MUTED}Drives: ${CLR_TEXT}$pDrives${CLR_RESET}"
+            Write-Host " ${CLR_SYS_BORDER}│${CLR_RESET}"
+        }
+
+        Write-Host " ${CLR_SYS_BORDER}│  ${CLR_WHITE}${CLR_BOLD}💬 RECENT CHAT SESSIONS & CONVERSATION SUMMARIES:${CLR_RESET}"
+        Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}───  ────────  ───────  ───────  ──────────────────────────────────────────${CLR_RESET}"
+        Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED} #   TIME      INTENT   TOOLS    USER QUERY ❯ AI SUMMARY PREVIEW${CLR_RESET}"
+        Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}───  ────────  ───────  ───────  ──────────────────────────────────────────${CLR_RESET}"
+
+        $chats = @()
+        if ($memData -and $memData.recent_chats) {
+            $chats = @($memData.recent_chats)
+        }
+
+        if ($chats.Count -eq 0) {
+            Write-Host " ${CLR_SYS_BORDER}│  ${CLR_DARK}(No past chat sessions recorded yet. Start talking in Chat Mode!)${CLR_RESET}"
+        } else {
+            $idx = 1
+            foreach ($c in ($chats | Select-Object -First 8)) {
+                $timeStr = "--:--"
+                if ($c.timestamp) {
+                    try {
+                        $parsedDate = [DateTime]::Parse($c.timestamp)
+                        $timeStr = $parsedDate.ToString("HH:mm:ss")
+                    } catch {
+                        $timeStr = "$($c.timestamp)".Substring(0, [math]::Min(8, "$($c.timestamp)".Length))
+                    }
+                }
+                $intentBadge = switch -wildcard ("$($c.intent)".ToUpper()) {
+                    "*TROUBLE*" { "${CLR_YELLOW}FIX    ${CLR_RESET}" }
+                    "*INFO*"    { "${CLR_CYAN}INFO   ${CLR_RESET}" }
+                    "*TECH*"    { "${CLR_BLUE}DOCS   ${CLR_RESET}" }
+                    "*GREET*"   { "${CLR_GREEN}CHAT   ${CLR_RESET}" }
+                    "*ACTION*"  { "${CLR_YELLOW}ACTION ${CLR_RESET}" }
+                    default     { "${CLR_MUTED}DIAG   ${CLR_RESET}" }
+                }
+                $toolsCount = if ($c.actions_count) { [int]$c.actions_count } else { 0 }
+                $actionsBadge = if ($toolsCount -gt 0) { "${CLR_GREEN}$toolsCount tools${CLR_RESET}" } else { "${CLR_DARK}0 tools${CLR_RESET}" }
+                $userMsg = if ($c.user_message) { "$($c.user_message)".Trim() } else { "Query" }
+                if ($userMsg.Length -gt 24) { $userMsg = $userMsg.Substring(0, 21) + "..." }
+                $aiSumm = if ($c.ai_summary) { "$($c.ai_summary)".Trim() } else { "Completed" }
+                if ($aiSumm.Length -gt 38) { $aiSumm = $aiSumm.Substring(0, 35) + "..." }
+
+                Write-Host " ${CLR_SYS_BORDER}│  ${CLR_CYAN}[$idx]${CLR_RESET} ${CLR_MUTED}$timeStr${CLR_RESET}  $intentBadge $actionsBadge  ${CLR_WHITE}$($userMsg.PadRight(24))${CLR_RESET} ${CLR_DARK}❯${CLR_RESET} ${CLR_TEXT}$aiSumm${CLR_RESET}"
+                $idx++
+            }
+        }
+
+        Write-Host " ${CLR_SYS_BORDER}│${CLR_RESET}"
+        Write-Host " ${CLR_SYS_BORDER}│  ${CLR_WHITE}${CLR_BOLD}🔧 VERIFIED AUTONOMOUS REPAIR EPISODES:${CLR_RESET}"
+        Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+
+        $episodes = @()
+        if ($memData -and $memData.recent_episodes) {
+            $episodes = @($memData.recent_episodes)
+        }
+
+        if ($episodes.Count -eq 0) {
+            Write-Host " ${CLR_SYS_BORDER}│  ${CLR_DARK}(No diagnostic repair episodes stored in persistent knowledge store)${CLR_RESET}"
+        } else {
+            foreach ($ep in ($episodes | Select-Object -First 4)) {
+                $issue = if ($ep.issue_summary) { $ep.issue_summary } else { "SYS-DIAG" }
+                $cause = if ($ep.root_cause) { $ep.root_cause } else { "Diagnostic verification" }
+                if ($cause.Length -gt 45) { $cause = $cause.Substring(0, 42) + "..." }
+                $outcome = if ($ep.outcome) { $ep.outcome } else { "$true" }
+                $outBadge = if ($outcome -match "true|success|completed|fixed") { "${CLR_GREEN}✔ RESOLVED${CLR_RESET}" } else { "${CLR_YELLOW}● CHECKED${CLR_RESET}" }
+
+                Write-Host " ${CLR_SYS_BORDER}│  ${CLR_GREEN}●${CLR_RESET} ${CLR_WHITE}$issue${CLR_RESET} ${CLR_DARK}─${CLR_RESET} ${CLR_TEXT}$cause${CLR_RESET}  $outBadge"
+            }
+        }
+
+        Write-Host " ${CLR_SYS_BORDER}│${CLR_RESET}"
+        Write-Host " ${CLR_SYS_BORDER}╰────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+        Write-Host " ${CLR_MUTED}  [1-8] View Chat Full Detail • [c] Clear Memory • [r] Refresh • [q/Esc] Back${CLR_RESET}   "
+
+        if ([Console]::IsInputRedirected) { return }
+
+        $keyInfo = [Console]::ReadKey($true)
+        if ($keyInfo.Key -in @([ConsoleKey]::Q, [ConsoleKey]::Escape)) { return }
+        elseif ($keyInfo.Key -eq [ConsoleKey]::R) { continue }
+        elseif ($keyInfo.Key -eq [ConsoleKey]::C) {
+            Write-Host ""
+            Write-Host -NoNewline " ${CLR_YELLOW}[?] Clear all persistent chat history and diagnostic memory? (y/N): ${CLR_RESET}"
+            $ans = [Console]::ReadLine()
+            if ($ans -and $ans.Trim().ToLower() -eq 'y') {
+                try {
+                    $headers = @{ "X-Session-Token" = $SessionToken }
+                    Invoke-RestMethod -Uri "$ServerUrl/api/v1/memory/clear" -Method Post -Headers $headers -TimeoutSec 5 | Out-Null
+                    Write-Host " ${CLR_GREEN}[✔] Persistent memory cleared successfully.${CLR_RESET}"
+                } catch {
+                    Write-Host " ${CLR_RED}[!] Error clearing memory.${CLR_RESET}"
+                }
+                Start-Sleep -Milliseconds 800
+            }
+            continue
+        }
+        elseif ($keyInfo.Key -ge [ConsoleKey]::D1 -and $keyInfo.Key -le [ConsoleKey]::D8) {
+            $sel = [int]$keyInfo.Key - [int][ConsoleKey]::D1
+            if ($chats -and $sel -lt $chats.Count) {
+                $targetChat = $chats[$sel]
+                Clear-Host
+                Write-Host ""
+                Write-Host " ${CLR_SYS_BORDER}╭─ [CHAT DETAIL #$($sel + 1)] ───────────────────────────────────────────────────${CLR_RESET}"
+                Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}TIMESTAMP : ${CLR_WHITE}$($targetChat.timestamp)${CLR_RESET}"
+                Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}INTENT    : ${CLR_CYAN}$($targetChat.intent)${CLR_RESET}"
+                Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}ACTIONS   : ${CLR_GREEN}$($targetChat.actions_count) tools executed${CLR_RESET}"
+                Write-Host " ${CLR_SYS_BORDER}│${CLR_RESET}"
+                Write-Host " ${CLR_SYS_BORDER}│  ${CLR_YELLOW}${CLR_BOLD}USER QUERY:${CLR_RESET}"
+                foreach ($line in ("$($targetChat.user_message)" -split "`r?`n")) {
+                    Write-Host " ${CLR_SYS_BORDER}│  ${CLR_WHITE}❯ $line${CLR_RESET}"
+                }
+                Write-Host " ${CLR_SYS_BORDER}│${CLR_RESET}"
+                Write-Host " ${CLR_SYS_BORDER}│  ${CLR_GREEN}${CLR_BOLD}AI DIAGNOSTIC & REMEDIATION SUMMARY:${CLR_RESET}"
+                foreach ($line in ("$($targetChat.ai_summary)" -split "`r?`n")) {
+                    Write-Host " ${CLR_SYS_BORDER}│  ${CLR_TEXT}$line${CLR_RESET}"
+                }
+                Write-Host " ${CLR_SYS_BORDER}│${CLR_RESET}"
+                Write-Host " ${CLR_SYS_BORDER}╰────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+                Write-Host " ${CLR_MUTED}  Press any key to return to Memory Dashboard...${CLR_RESET}"
+                [Console]::ReadKey($true) | Out-Null
+                Clear-Host
+            }
+            continue
+        }
+    }
+}
+
 # ==============================================================================
 # REMEDIATION & DISPATCH
 # ==============================================================================
@@ -1978,6 +2130,7 @@ function Start-ConversationMode($initialPrompt = $null) {
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}!cmd / >cmd   ${CLR_RESET}  ${CLR_WHITE}- Direct native CMD & PowerShell passthrough $CLR_RESET"
             Write-Host " $CLR_CYAN│$CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_YELLOW}INTERACTIVE TUI DASHBOARDS:${CLR_RESET}"
+            Write-Host " $CLR_CYAN│  ${CLR_CYAN}/memory       ${CLR_RESET}  ${CLR_WHITE}- 🧠 Persistent Memory & Past Chat Summaries     $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_CYAN}/wifi         ${CLR_RESET}  ${CLR_WHITE}- [NET] Wi-Fi & Network Radar (Signal, IP, Ping)$CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_CYAN}/disk         ${CLR_RESET}  ${CLR_WHITE}- [DISK] Storage Heatmap & S.M.A.R.T. Health Map $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_CYAN}/specs        ${CLR_RESET}  ${CLR_WHITE}- ⚡ Windows Architecture & Fastfetch Card   $CLR_RESET"
@@ -2022,6 +2175,10 @@ function Start-ConversationMode($initialPrompt = $null) {
         }
         if ($pLower -in @("/devices", "/hw", "devices", "hw")) {
             Show-DeviceHardwareTUI
+            continue
+        }
+        if ($pLower -in @("/memory", "/history", "/chats", "memory", "history", "chats")) {
+            Show-MemoryDashboardTUI
             continue
         }
         if ($pLower -in @("/wifi", "/net", "wifi", "net")) {
@@ -2343,6 +2500,7 @@ function Show-CommandPalette {
         @{ Slug = "/cli";       Name = "Install Global 'kronos' Terminal Command";     Action = "install-cli" },
         @{ Slug = "/rollback";  Name = "Safety Rollback Recovery Engine";             Action = "rollback" },
         @{ Slug = "/chat";      Name = "Open Autonomous AI Chatbot (Natural Chat)";    Action = "chat" },
+        @{ Slug = "/memory";    Name = "Persistent Memory & Past Chat Summaries";      Action = "memory" },
         @{ Slug = "/lock";      Name = "Lock Session and Prompt Security Gateway";     Action = "lock" },
         @{ Slug = "/exit";      Name = "Terminate KRONOS Session";                     Action = "exit" }
     )
@@ -2495,12 +2653,13 @@ function Select-InteractiveMenu {
         @{
             Key = "5"; Title = "KRONOS AI CO-PILOT & VOICE";
             Tag = "AUTONOMOUS";
-            Desc = "Autonomous AI Co-Pilot • Native Voice Engine • Global CLI • Rollback Safety";
+            Desc = "Autonomous AI Co-Pilot • Memory & Chats • Native Voice Engine • Global CLI • Rollback Safety";
             SubItems = @(
                 @{ Key = "1"; Label = "Open Autonomous AI Chatbot (Natural Chat)";             Action = "chat" },
-                @{ Key = "2"; Label = "Toggle Native Voice Engine (Speech Synthesis)";         Action = "voice" },
-                @{ Key = "3"; Label = "Install Global 'kronos' Terminal Command";              Action = "install-cli" },
-                @{ Key = "4"; Label = "Safety Rollback Recovery Engine";                       Action = "rollback" },
+                @{ Key = "2"; Label = "Persistent Memory & Past Chat Summaries";               Action = "memory" },
+                @{ Key = "3"; Label = "Toggle Native Voice Engine (Speech Synthesis)";         Action = "voice" },
+                @{ Key = "4"; Label = "Install Global 'kronos' Terminal Command";              Action = "install-cli" },
+                @{ Key = "5"; Label = "Safety Rollback Recovery Engine";                       Action = "rollback" },
                 @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
             )
         },
@@ -2879,6 +3038,14 @@ while ($true) {
         # Category 5: AI & Settings
         "chat" {
             Start-ConversationMode
+            continue
+        }
+        "memory" {
+            Show-MemoryDashboardTUI
+            continue
+        }
+        "history" {
+            Show-MemoryDashboardTUI
             continue
         }
         "voice" {

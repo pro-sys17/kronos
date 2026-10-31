@@ -320,9 +320,15 @@ class TestFastAPIRoutes(unittest.TestCase):
         self.assertGreaterEqual(data["total_tools"], 26)
 
     def test_memory_routes(self):
+        from app.core.memory.store import MemoryStore
+        MemoryStore.save_chat_turn("session-123", "kya haal hai", "Sab badhiya bhai", "GREETING_CHITCHAT", 0)
+
         resp = self.client.get("/api/v1/memory")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["status"], "SUCCESS")
+        data = resp.json()
+        self.assertEqual(data["status"], "SUCCESS")
+        self.assertIn("recent_chats", data)
+        self.assertGreaterEqual(data["recent_chats_count"], 1)
 
         clear_resp = self.client.post("/api/v1/memory/clear")
         self.assertEqual(clear_resp.status_code, 200)

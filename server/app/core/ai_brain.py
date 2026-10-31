@@ -1863,7 +1863,8 @@ class AIBrain:
         problem: str,
         telemetry: Dict[str, Any],
         history: Optional[List[Dict[str, Any]]] = None,
-        last_output: Optional[str] = None
+        last_output: Optional[str] = None,
+        session_token: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Level 2 Controlled Autonomy Diagnostic Coordinator.
@@ -1875,6 +1876,20 @@ class AIBrain:
         intent_info = IntentClassifier.classify(resolved_problem, history)
         intent = intent_info.intent.value if hasattr(intent_info.intent, "value") else str(intent_info.intent)
 
+        # Helper: Record chat turn into persistent memory before returning
+        def _finalize_and_record(p: Dict[str, Any]) -> Dict[str, Any]:
+            try:
+                MemoryStore.save_chat_turn(
+                    session_token=session_token or "default",
+                    user_message=problem,
+                    ai_summary=p.get("summary", ""),
+                    intent=intent,
+                    actions_count=len(p.get("actions", []))
+                )
+            except Exception:
+                pass
+            return p
+
         # Step 3: Telemetry sync to persistent memory
         if telemetry:
             try:
@@ -1885,10 +1900,10 @@ class AIBrain:
         # Step 4: Handle conversational, chit-chat, cancellations, & ambiguities immediately
         chat_plan = self._check_conversational_query(resolved_problem)
         if chat_plan:
-            return chat_plan
+            return _finalize_and_record(chat_plan)
 
         if intent == "GREETING_CHITCHAT":
-            return {
+            return _finalize_and_record({
                 "issue_id": "SYS-CHITCHAT",
                 "root_cause": "Greeting or casual chatter",
                 "risk_level": "LOW",
@@ -1898,10 +1913,10 @@ class AIBrain:
                 "selected_tools": [],
                 "verification_command": "$true",
                 "requires_confirmation": False
-            }
+            })
 
         if intent == "CANCELLATION":
-            return {
+            return _finalize_and_record({
                 "issue_id": "SYS-CANCEL",
                 "root_cause": "User requested operation cancellation",
                 "risk_level": "LOW",
@@ -1911,10 +1926,10 @@ class AIBrain:
                 "selected_tools": [],
                 "verification_command": "$true",
                 "requires_confirmation": False
-            }
+            })
 
         if intent == "AMBIGUOUS_QUERY":
-            return {
+            return _finalize_and_record({
                 "issue_id": "SYS-AMBIGUOUS",
                 "root_cause": "User query lacks specific system component or target",
                 "risk_level": "LOW",
@@ -1924,37 +1939,37 @@ class AIBrain:
                 "selected_tools": [],
                 "verification_command": "$true",
                 "requires_confirmation": False
-            }
+            })
 
         # Step 5: Built-in Interactive TUIs and specialized system operations
         tui_plan = self._check_tui_request(resolved_problem)
         if tui_plan:
-            return tui_plan
+            return _finalize_and_record(tui_plan)
 
         net_plan = self._check_network_control_request(resolved_problem, history=history)
         if net_plan:
-            return net_plan
+            return _finalize_and_record(net_plan)
 
         kill_plan = self._check_kill_request(resolved_problem)
         if kill_plan:
-            return kill_plan
+            return _finalize_and_record(kill_plan)
 
         open_plan = self._check_open_request(resolved_problem, last_output=last_output, history=history)
         if open_plan:
-            return open_plan
+            return _finalize_and_record(open_plan)
 
         delete_plan = self._check_delete_request(resolved_problem)
         if delete_plan:
-            return delete_plan
+            return _finalize_and_record(delete_plan)
 
         find_plan = self._check_find_request(resolved_problem)
         if find_plan:
-            return find_plan
+            return _finalize_and_record(find_plan)
 
         if not history:
             fast_plan = self._check_fast_path(resolved_problem)
             if fast_plan:
-                return fast_plan
+                return _finalize_and_record(fast_plan)
 
         # Step 6: Query AI Providers or Fallback
         plan: Optional[Dict[str, Any]] = None
@@ -2043,7 +2058,7 @@ class AIBrain:
         except Exception:
             pass
 
-        return plan
+        return _finalize_and_record(plan)
 
     async def _query_groq(
         self,
