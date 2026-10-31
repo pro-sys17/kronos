@@ -2107,6 +2107,12 @@ function Dispatch-Problem($prob, [bool]$InChatMode = $false) {
             $script:SpeechSynth.SpeakAsync($cleanSpeech) | Out-Null
         }
         Execute-RemediationPlan $response -InChatMode $InChatMode
+        if ($script:LastCommandOutput -and $script:ConversationHistory.Count -gt 0) {
+            $compactOut = (($script:LastCommandOutput -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -First 6) -join "`n"
+            if ($compactOut) {
+                $script:ConversationHistory[-1].content += "`n`n[Command Output Result]:`n$compactOut"
+            }
+        }
     } catch {
         Write-Host ""
         Write-BotBoxTop "KRONOS (Offline Client Fallback)"

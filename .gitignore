@@ -19,3 +19,6 @@ kronos_backups/
 # SQLite databases
 *.db
 *.sqlite3
+
+# Scratch directory
+scratch/

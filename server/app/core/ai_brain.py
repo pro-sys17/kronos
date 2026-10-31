@@ -1,39 +1,191 @@
-MASTER_SYSTEM_INSTRUCTION = r"""You are KRONOS — the Autonomous Windows Systems Administrator, Diagnostic Co-Pilot, and technical partner for 'Professor' (or 'bhai').
-You possess comprehensive mastery over Windows 10 & 11, CMD, native PowerShell cmdlets, and internal Windows subsystems.
+MASTER_SYSTEM_INSTRUCTION = r"""# KRONOS — MASTER SYSTEM INSTRUCTIONS
 
-CORE 3-STEP USER QUERY PRINCIPLE:
-Jab bhi user koi bhi sawal ya instruction de, strictly ye 3 steps follow karo:
+## 1. IDENTITY
+You are KRONOS AI Co-Pilot, an advanced Windows System Administrator, Troubleshooting Specialist, and System Recovery Assistant for 'Professor' (or 'bhai').
+Your responsibility is to help users understand, diagnose, troubleshoot, optimize, and maintain Windows systems.
+You are not a generic chatbot.
 
-1. STEP 1: QUERY KO PEHLE SAMJHO (Understand the User's Real Intent & Need):
-   - Har query ko dhyan se samjho: user kya chahta hai?
-     * Explanation / Concept / "Brief me batao / samjhao"?
-     * System inspection / diagnosis / "kya chal raha hai"?
-     * Direct action / execution (file search, process kill, adapter change)?
-     * Casual chitchat / opinion / general technical guidance?
-   - User ne kaisa format maanga hai? (e.g., "in brief", "step by step", "details me", "table me").
-   - User ki current system telemetry dekho (CPU%, Free RAM, Disks): agar CPU high hai (e.g. >70%) ya RAM low hai (<1GB free), toh usko context me samjho aur point out karo!
+You must prioritize:
+- Technical accuracy
+- Context awareness
+- Relevant answers
+- Root-cause analysis
+- Practical solutions
+- Safe system operations
+- Result verification
 
-2. STEP 2: USSE RELATED SAARI DETAILS FETCH KARO (Select Tools When System Data is Needed):
-   - Agar query ke liye live system facts chahiye (ports, running services, network status, heavy processes, hardware, file search, disk usage):
-     Tool select karo via "selected_tools":
-     "selected_tools": [
-         {"tool_id": "network.list_ports", "arguments": {"limit": 10}}
-     ]
-   - Agar user ka sawal conceptual hai (e.g. "port 80 vs 443", "svchost kya hai", "python vs js", "FastAPI setup") ya general help hai:
-     Zero tools select karo ("selected_tools": []), aur direct answer formulate karo.
-   - Never output arbitrary unvalidated PowerShell scripts if a registered tool can perform the task. Ensure arguments strictly match registered parameter schemas.
+## 2. UNDERSTAND THE USER'S INTENT
+Before answering, identify what the user actually wants.
+Classify the request into one of these categories:
+- General technical question
+- Windows troubleshooting
+- Network diagnostics
+- System performance
+- Memory and CPU problems
+- Disk and storage problems
+- Windows security
+- Application errors
+- Hardware-related problems
+- System recovery
+- KRONOS feature explanation
+- Follow-up question
+- General conversation
 
-3. STEP 3: USER KI QUERY KE ACCORDING JAISA ANSWER CHAHIYE WAISA TAILORED ANSWER DO:
-   - "summary" field me user ko directly, thoroughly aur intelligently answer karo:
-     * Agar user ne "brief me / details" maanga hai: Explain clearly what it is, what key components mean (e.g. open ports kya hain, listening vs established me kya fark hai, safe hain ya nahi), and summarize the key takeaways!
-     * Agar user ne "laptop slow kyu hai" pucha: Telemetry facts cite karo (e.g. "Bhai aapka CPU 85% chal raha hai aur RAM sirf 500MB bachi hai...") aur practical remedies batao!
-     * Agar user ne concept pucha: Bullet points aur crisp explanation do!
-     * KABHI BHI sirf 1-line ki dry robotic intro mat feko! User ko ek smart, knowledgeable co-pilot ka feel aana chahiye.
-   - Tone: Natural, friendly, confident Hinglish ("bhai", "Professor", "dekho", "tension mat lo"). (English if user writes in English).
-   - Format: Clean terminal Markdown (bold terms, bullet points '-', concise readable paragraphs).
-   - Character safety: Strictly use standard ASCII characters. Never use unicode dashes or thin spaces.
+Never force every conversation into troubleshooting.
+If the user asks what DNS means, explain DNS. Do not automatically generate PowerShell commands.
+If the user reports that their internet is not working, begin troubleshooting.
 
-LEVEL 2 CONTROLLED AUTONOMY RULES:
+## 3. CONTEXT AWARENESS
+You may receive:
+- Current user message
+- Previous conversation history
+- Windows system information
+- Diagnostic results
+- Available system tools
+- Previous troubleshooting steps
+- Previous action results
+
+Use all relevant information before responding.
+Never ask the user to repeat information already available.
+Maintain context across multiple messages.
+Do not restart the troubleshooting process from the beginning after every message.
+
+## 4. TECHNICAL ACCURACY
+Never invent:
+- System specifications
+- Diagnostic results
+- Error messages
+- Windows configurations
+- Command execution results
+- Network status
+- Root causes
+
+Differentiate between:
+- Confirmed facts
+- Likely causes
+- Unverified assumptions
+
+If information is insufficient, ask one specific question or request the relevant diagnostic information.
+Do not pretend that you have inspected the user's computer unless actual diagnostic data has been provided.
+
+## 5. TROUBLESHOOTING METHODOLOGY
+Follow this workflow:
+1. Understand the reported problem.
+2. Identify the most likely causes.
+3. Check available diagnostic information.
+4. Select the smallest relevant diagnostic operation.
+5. Analyze the returned result.
+6. Identify the root cause where possible.
+7. Recommend the appropriate fix.
+8. Request confirmation before consequential system modifications.
+9. Execute only authorized operations through registered tools.
+10. Verify the actual result.
+
+Prefer the least invasive solution.
+Do not recommend reinstalling Windows, resetting the PC, or performing destructive operations when a smaller fix is available.
+
+## 6. TOOL USAGE
+You can access system capabilities through tools provided by KRONOS.
+Use only tools that are explicitly registered and available.
+Before selecting a tool:
+- Understand what it does.
+- Check whether it is relevant.
+- Check its required arguments.
+- Consider its impact on the system.
+
+Rules:
+- Diagnostic operations can run when authorized.
+- Modifying configurations requires appropriate authorization.
+- Destructive operations require explicit confirmation.
+- Never invent tool names or tool results.
+- Never claim an operation succeeded without receiving its execution result.
+- Verify important modifications after execution.
+- If no tool is needed (conceptual explanation, general conversation, or asking clarification), leave "selected_tools": [].
+- Do not generate arbitrary executable PowerShell commands as a substitute for registered tools.
+
+## 7. RESPONSE QUALITY
+Answer the exact question asked.
+Avoid:
+- Unnecessary introductions
+- Repeating the user's question
+- Generic troubleshooting lists
+- Irrelevant technical information
+- Unnecessary PowerShell commands
+- Overly complicated explanations
+- Recommending the same failed solution repeatedly
+
+For technical explanations:
+1. What happened?
+2. Why did it happen?
+3. How can it be fixed?
+
+For troubleshooting:
+1. Current finding
+2. Likely cause
+3. Next diagnostic step or fix
+
+Keep responses concise unless detailed explanations are requested.
+
+## 8. CONVERSATION PERSONALITY
+Communicate naturally.
+Support English and Hinglish seamlessly. (If user asks in Hinglish, reply warmly in natural Hinglish with terms like 'bhai', 'Professor'; if in English, reply in clean professional English).
+Adapt your technical depth to the user's understanding.
+Explain complicated technical concepts in simple language when necessary.
+Never sacrifice technical accuracy to sound confident.
+Do not behave like a scripted customer-support bot.
+
+## 9. SPECIAL CASES
+- Greetings: Respond naturally. Do not run diagnostics.
+- Follow-up questions: Use previous conversation context and previous command outputs.
+- Insufficient information: Ask a relevant clarification instead of guessing.
+- Failed operations: Analyze the returned error. Do not blindly repeat the same operation.
+- Multiple possible causes: Prioritize the most probable cause and test it.
+- Unavailable AI provider: Do not fabricate an answer or pretend that AI analysis occurred.
+- Dangerous system operations: Do not execute unauthorized or destructive operations.
+
+## 10. CORE PRINCIPLE
+Your objective is not to produce the longest answer.
+Your objective is to understand the user's actual problem and provide the most accurate, relevant, and actionable solution.
+Think like a professional Windows System Administrator.
+Respond like an intelligent technical assistant.
+Act only through authorized KRONOS capabilities.
+
+## RESPONSE FORMATTING INTELLIGENCE
+Always select the most appropriate response format based on the user's query.
+Do not force every response into paragraphs or bullet points.
+
+1. TABLE FORMAT: Use tables whenever information involves:
+   - Comparisons (e.g. NTFS vs exFAT, TCP vs UDP)
+   - Multiple components or specifications
+   - Advantages and disadvantages
+   - Diagnostic results
+   - System configurations
+   - Step-by-step comparisons
+   - Before/after results
+   Example:
+   | Component | Status | Details |
+   |---|---|---|
+   | CPU | Normal | 25% usage |
+   | RAM | High | 91% usage |
+   | Disk | Normal | 35% usage |
+
+2. BULLET POINTS: Use bullet points ('-') for lists, multiple recommendations, important findings, key takeaways, and troubleshooting observations.
+3. NUMBERED STEPS: Use numbered steps ('1.', '2.') for installation instructions, configuration, troubleshooting procedures, system recovery, and technical implementation guides.
+4. PARAGRAPHS: Use concise paragraphs for general questions, technical explanations, concept definitions, and conversational responses.
+5. CODE BLOCKS: Use code blocks for PowerShell/CMD commands, configuration files, and code examples. Always explain what a command does when relevant.
+6. HEADINGS: Use markdown headings ('###') when an answer contains multiple distinct sections.
+7. SIMPLE ANSWERS: For simple questions, answer directly in one or two sentences.
+8. MIXED FORMATTING: Combine tables, bullet points, paragraphs, and code blocks when necessary.
+
+STRICT FORMATTING & CHARACTER RULES:
+- Never use tables unnecessarily.
+- Never force long paragraphs when a table would improve readability.
+- Never sacrifice technical details for brevity.
+- Keep tables readable and properly structured.
+- Answer the user's actual question first.
+- Strict ASCII character compatibility: ONLY use standard ASCII hyphens ('-'). NEVER use unicode non-breaking hyphens, en-dashes, em-dashes, or unicode arrows (use '->' or '<-').
+
+## LEVEL 2 CONTROLLED AUTONOMY RULES:
 - LOW RISK (Read-Only & Safe Inspections): Automatically executable. Examples: ping, nslookup, inspecting services, checking disks, testing DNS, querying event logs.
 - MODERATE RISK (Safe Non-Destructive Resets): Requires user confirmation. Examples: flushing DNS cache, clearing temp files, restarting non-critical services (AudioSrv, spooler), restarting network adapters.
 - HIGH RISK (Potentially Disruptive / Process Termination): Requires explicit confirmation and clear warning. Examples: terminating non-responsive processes, killing apps.
@@ -45,7 +197,7 @@ OUTPUT FORMAT (Strictly valid JSON, no markdown code block backticks outside JSO
   "root_cause": "Technical cause, query classification, or conversation topic",
   "intent": "TROUBLESHOOTING_REQUEST | ACTION_REQUEST | SYSTEM_INFO_REQUEST | TECHNICAL_EXPLANATION | GREETING_CHITCHAT",
   "risk_level": "LOW | MODERATE | HIGH",
-  "summary": "Warm, natural, technically accurate response in Hinglish/English",
+  "summary": "Warm, natural, technically accurate response formatted with tables, bullets, steps, or paragraphs as appropriate",
   "selected_tools": [
     {"tool_id": "tool_id_from_registry", "arguments": {"param": "value"}}
   ],
@@ -127,7 +279,7 @@ class AIBrain:
         models = []
         if custom_model:
             models.append(custom_model)
-        defaults = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
+        defaults = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
         for m in defaults:
             if m not in models:
                 models.append(m)
@@ -395,7 +547,7 @@ class AIBrain:
                 ],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/wifi", "/net", "wifi info", "wi-fi", "network info", "internet speed", "signal check", "ping latency", "wifi radar"]):
+        if p in ["/wifi", "/net", "wifi", "net", "wifi radar"]:
             return {
                 "issue_id": "SYS-TUI-NET",
                 "root_cause": "Interactive Network & Wi-Fi Latency Radar",
@@ -405,7 +557,7 @@ class AIBrain:
                 "actions": [{"description": "Launch Network Radar TUI", "command": "Show-NetworkRadarTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/disk", "/storage", "disk info", "storage info", "storage kitna", "disk kitna", "ssd health", "hard drive", "partition", "disk health"]):
+        if p in ["/disk", "/storage", "disk", "storage", "disk health", "ssd health"]:
             return {
                 "issue_id": "SYS-TUI-DISK",
                 "root_cause": "Interactive Storage & S.M.A.R.T. Health Map",
@@ -415,7 +567,7 @@ class AIBrain:
                 "actions": [{"description": "Launch Storage Health TUI", "command": "Show-DiskHealthTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/specs", "/sys", "system specs", "pc details", "laptop details", "hardware specs", "fastfetch", "neofetch", "specs batao", "pc specs"]):
+        if p in ["/specs", "/sys", "specs", "system specs", "fastfetch", "neofetch"]:
             return {
                 "issue_id": "SYS-TUI-SPECS",
                 "root_cause": "Interactive Windows Architecture & Fastfetch Specs",
@@ -425,7 +577,7 @@ class AIBrain:
                 "actions": [{"description": "Launch System Specs TUI", "command": "Show-SystemSpecsTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/top", "/task", "task manager", "cpu usage", "ram usage", "kaun kha raha he", "resource monitor", "top process", "processes"]):
+        if p in ["/top", "/task", "top", "task", "task manager"]:
             return {
                 "issue_id": "SYS-TUI-TOP",
                 "root_cause": "Interactive Live Resource & Task Monitor",
@@ -435,7 +587,7 @@ class AIBrain:
                 "actions": [{"description": "Launch Resource Monitor TUI", "command": "Show-TaskMonitorTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/tree", "/folder", "/browse", "/superfile", "/fm", "/yazi", "/ranger", "superfile", "super file", "file manager", "folder explorer", "browse files", "file browse", "yazi", "ranger"]):
+        if p in ["/tree", "/folder", "/browse", "/superfile", "/fm", "/yazi", "/ranger", "tree", "superfile"]:
             return {
                 "issue_id": "SYS-TUI-TREE",
                 "root_cause": "Superfile Dual-Pane Workspace & Live Preview (awesome-tuis)",
@@ -445,7 +597,7 @@ class AIBrain:
                 "actions": [{"description": "Launch Superfile TUI", "command": "Show-FolderNavigatorTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/ports", "/netstat", "open ports", "listening ports", "port check"]):
+        if p in ["/ports", "/netstat", "ports", "netstat", "port audit"]:
             return {
                 "issue_id": "SYS-TUI-PORTS",
                 "root_cause": "Active Listening Ports & Process Audit",
@@ -455,7 +607,7 @@ class AIBrain:
                 "actions": [{"description": "Launch Port Audit TUI", "command": "Show-PortAuditTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/audio", "/sound", "/cava", "cava", "sound problem", "audio info", "sound nahi aa raha", "audio reset", "audio equalizer", "sound visualizer"]):
+        if p in ["/audio", "/sound", "/cava", "cava", "audio tui", "sound visualizer"]:
             return {
                 "issue_id": "SYS-TUI-AUDIO",
                 "root_cause": "Audio Subsystem & CAVA Real-Time Spectrum Equalizer",
@@ -465,7 +617,7 @@ class AIBrain:
                 "actions": [{"description": "Launch Audio TUI", "command": "Show-AudioTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/band", "/flow", "/netflow", "/bandwhich", "bandwhich", "bandwidth", "traffic", "network traffic", "kaun net use kar raha", "net kaun kha raha"]):
+        if p in ["/band", "/flow", "/netflow", "/bandwhich", "bandwhich"]:
             return {
                 "issue_id": "SYS-TUI-BAND",
                 "root_cause": "Process Bandwidth & Socket Flow Analyzer (bandwhich)",
@@ -475,7 +627,7 @@ class AIBrain:
                 "actions": [{"description": "Launch Bandwidth Radar TUI", "command": "Show-BandwidthRadarTUI"}],
                 "verification_command": "$true"
             }
-        if any(w in p for w in ["/dust", "/ncdu", "/treesize", "dust", "ncdu", "treemap", "folder size", "space kaha gaya", "heavy folder", "kaha space use ho raha"]):
+        if p in ["/dust", "/ncdu", "/treesize", "dust", "ncdu"]:
             return {
                 "issue_id": "SYS-TUI-DUST",
                 "root_cause": "Disk Usage Treemap & Depth Visualizer (dust/ncdu)",
@@ -675,8 +827,12 @@ class AIBrain:
         if not is_kill:
             return None
 
+        # If user is asking a question, advice, or diagnosis (e.g., 'kaun sa process band karu?'):
+        if any(w in p for w in ["kaun", "which", "kisko", "kise", "what", "kaise", "how", "?", "suggest", "advice", "batao", "bata"]):
+            return None
+
         # Exclude wifi/ethernet network turning off (handled by _check_network_control_request)
-        if any(w in p for w in ["wifi", "wi-fi", "ethernet", "internet", "net", "adapter"]):
+        if any(w in p for w in ["wifi", "wi-fi", "ethernet", "internet", "net", "adapter", "ram", "cpu", "disk", "usage", "%"]):
             return None
 
         # Extract process target
@@ -704,7 +860,7 @@ class AIBrain:
                     candidates = clean.split()
                     target = candidates[0].strip() if candidates else None
 
-        if not target or len(target) < 2 or target.lower() in ["ye", "wo", "ise", "isko", "usko", "sab", "sare"]:
+        if not target or len(target) < 2 or target.lower() in ["ye", "wo", "ise", "isko", "usko", "sab", "sare", "ram", "cpu", "disk", "system", "pc", "laptop", "computer", "process", "usage"]:
             return None
 
         clean_target = target.replace("'", "").replace('"', "").replace("*", "").replace("?", "").strip()
@@ -1898,13 +2054,20 @@ class AIBrain:
         # Step 5: Built-in Interactive TUIs and specialized system operations
         # If user is in an active conversation (history present) or asking an explanation / follow-up,
         # prioritize LLM reasoning over static heuristic interceptors (unless explicitly requested via '/')
+        # Static TUIs should ONLY trigger on explicit slash commands (e.g. /wifi, /top, /disk)
+        # or single standalone keywords (e.g. 'wifi', 'top', 'specs')
+        words = resolved_problem.strip().split()
+        single_word = resolved_problem.strip().lower()
         is_explicit_slash = resolved_problem.strip().startswith("/")
-        is_conversational_turn = bool(history and len(history) > 0)
-        is_explanation = intent in ["TECHNICAL_EXPLANATION", "FOLLOW_UP_REQUEST"] or any(
-            w in resolved_problem.lower() for w in ["kyu", "why", "kaise", "what", "explain", "detail", "details", "samjhao", "table", "matlab", "reason", "unko", "inme", "kya hai", "kis kaam"]
-        )
+        STANDALONE_TUI_WORDS = {
+            "wifi", "net", "top", "task", "specs", "sys", "disk", "storage",
+            "ports", "matrix", "doctor", "health", "boost", "clean", "startup",
+            "boot", "apps", "winget", "debloat", "services", "svc", "firewall",
+            "audio", "sound", "tree", "power", "battery", "devices", "cava", "bandwhich", "dust"
+        }
+        is_standalone_tui_word = (len(words) == 1 and single_word in STANDALONE_TUI_WORDS) or (len(words) == 2 and single_word in ["task manager", "system specs", "disk health", "wifi radar"])
 
-        if is_explicit_slash or (not is_conversational_turn and not is_explanation):
+        if is_explicit_slash or is_standalone_tui_word:
             tui_plan = self._check_tui_request(resolved_problem)
             if tui_plan:
                 return _finalize_and_record(tui_plan)
@@ -2086,10 +2249,14 @@ class AIBrain:
                 "messages": messages,
                 "response_format": {"type": "json_object"},
                 "temperature": 0.0,
-                "max_tokens": 1000
+                "max_tokens": 1200
             }
             try:
                 resp = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
+                if resp.status_code == 429:
+                    print(f"[-] Groq rate limit 429 on {model}, attempting failover...")
+                    last_error = RuntimeError(f"Groq 429 on {model}")
+                    continue
                 resp.raise_for_status()
                 data = resp.json()
                 raw_text = data["choices"][0]["message"]["content"].strip()
@@ -2188,17 +2355,149 @@ class AIBrain:
                 "requires_confirmation": skill.confirmation_required or risk_tier in ["MODERATE", "HIGH"]
             }
 
-        # Fallback to standard deterministic diagnosis
+        p_lower = problem.lower().strip()
+
+        # 2. Offline Conceptual & Architectural Explanations (with Tables & Structure)
+        # 2a. File Systems Comparison (NTFS vs exFAT vs FAT32)
+        if any(w in p_lower for w in ["ntfs vs exfat", "exfat vs ntfs", "fat32 vs ntfs", "file system", "ntfs kya", "exfat kya"]):
+            table = (
+                "| Feature | NTFS | exFAT | FAT32 |\n"
+                "|---|---|---|---|\n"
+                "| Max File Size | 16 TB (practical) | 128 PB (virtually unlimited) | 4 GB |\n"
+                "| Compatibility | Windows (Read/Write), Mac (Read-only) | Windows & macOS (Full R/W) | Almost all devices |\n"
+                "| Security & Permissions | Full ACL, Encrypting File System (EFS) | None | None |\n"
+                "| Journaling / Reliability | Yes (prevents corruption on sudden unplug) | No | No |\n"
+                "| Best Use Case | Windows internal system drive (C:) | USB flash drives, External hard drives | Older game consoles, legacy devices |"
+            )
+            summary = (
+                f"Bhai, NTFS aur exFAT dono alag-alag purpose ke liye design kiye gaye hain:\n\n"
+                f"{table}\n\n"
+                f"- **Agar Windows internal drive ya software install karna hai**: **NTFS** best hai kyu ki isme journaling aur file permissions hote hain.\n"
+                f"- **Agar pen drive / external hard drive dono Mac aur Windows me chalani hai**: **exFAT** choose karo kyu ki isme 4GB se badi movies/files copy ho sakti hain bina cross-platform issue ke."
+            )
+            return {
+                "issue_id": "EXP-FS-COMPARE",
+                "root_cause": "File system architecture comparison (NTFS vs exFAT)",
+                "intent": "TECHNICAL_EXPLANATION",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": summary,
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 2b. Port 80 vs 443 / Open Ports Concept
+        if any(w in p_lower for w in ["port 80", "port 443", "80 vs 443", "open ports kya", "listening ports kya"]):
+            table = (
+                "| Port | Protocol | Encryption | Security Status | Default Usage |\n"
+                "|---|---|---|---|---|\n"
+                "| 80 | HTTP | Unencrypted (Plaintext) | Insecure for sensitive data | Web browsing (legacy / redirects) |\n"
+                "| 443 | HTTPS | Encrypted (TLS/SSL) | Secure | Secure web traffic, APIs, banking |\n"
+                "| 53 | DNS | Unencrypted (UDP/TCP) | Standard | Domain name resolution |\n"
+                "| 3389 | RDP | Encrypted (Proprietary) | High security risk if exposed to public | Remote Desktop Protocol |"
+            )
+            summary = (
+                f"Bhai, **Port 80 aur Port 443** dono web traffic ke standard networking gates hain:\n\n"
+                f"{table}\n\n"
+                f"- **Port 80 (HTTP)**: Ye unencrypted data bhejta hai. Koi bhi packet sniffer ya attacker network me data read kar sakta hai.\n"
+                f"- **Port 443 (HTTPS)**: Ye TLS/SSL certificate se end-to-end encrypt hota hai. Aajkal modern internet par 99% websites 443 use karti hain.\n"
+                f"- **Safe vs Unsafe**: Apne local machine par Port 80/443 open hona tabhi zaroori hai agar aap local web server (jaise Apache, Nginx, ya FastAPI) chala rahe ho. Agar koi web server nahi chala rahe, toh ye band hone chahiye."
+            )
+            return {
+                "issue_id": "EXP-PORT-COMPARE",
+                "root_cause": "Network port concepts & protocol security comparison",
+                "intent": "TECHNICAL_EXPLANATION",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": summary,
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 2c. KRONOS Features & Capabilities Overview
+        if any(w in p_lower for w in ["what can you do", "kronos features", "tum kya kar", "kya kar sakta", "features", "capabilities", "kronos kya hai"]):
+            table = (
+                "| Capability | Key Commands / TUIs | Description |\n"
+                "|---|---|---|\n"
+                "| System Health & Doctor | `/doctor`, `/boost` | 10-Point deep system audit, disk cleaner & RAM optimizer |\n"
+                "| Live Resource Monitoring | `/top`, `/specs` | Live task monitor, CPU/RAM hog detection & hardware card |\n"
+                "| Network & Connectivity | `/wifi`, `/ports`, `/band` | Wi-Fi radar, packet latency test, listening ports audit |\n"
+                "| Security & Hardening | `/firewall`, `/debloat` | Defender profiles audit, privacy & telemetry optimization |\n"
+                "| File & App Management | `/open <#>`, `/tree`, `/apps` | Interactive app launcher, folder navigator, WinGet manager |\n"
+                "| Autonomous Troubleshooting | Natural query | Automated diagnostic playbooks with Level 2 safe autonomy |"
+            )
+            summary = (
+                f"Bhai, KRONOS ek autonomous Windows Co-Pilot aur SysAdmin assistant hai. Main aapke system ko diagnose, optimize, aur recover karne me help karta hu:\n\n"
+                f"{table}\n\n"
+                f"Aap natural Hindi/English me sawal puch sakte ho (jaise *'internet slow hai'*, *'ram usage kyu high hai'*), ya seedha slash commands run kar sakte ho!"
+            )
+            return {
+                "issue_id": "EXP-KRONOS-FEATURES",
+                "root_cause": "KRONOS autonomous capabilities and feature breakdown",
+                "intent": "KRONOS_FEATURE_EXPLANATION",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": summary,
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 3. KnowledgeBase Search Integration
+        kb_results = KnowledgeBase.search(problem, limit=1)
+        if kb_results:
+            top_kb = kb_results[0]
+            summary = (
+                f"**{top_kb.title}**\n\n"
+                f"{top_kb.content}\n\n"
+                f"- *Domain*: {top_kb.domain}\n"
+                f"- *Source*: {top_kb.source}"
+            )
+            return {
+                "issue_id": top_kb.doc_id,
+                "root_cause": f"Technical Knowledge Base article: {top_kb.title}",
+                "intent": "TECHNICAL_EXPLANATION",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": summary,
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 4. Ambiguous / Insufficient Information Guard
+        words = p_lower.split()
+        if (len(words) <= 7 and any(w in p_lower for w in ["help", "kuch", "issue", "error", "problem", "kharaab", "dikkat", "samajh nahi"])) or p_lower in ["help", "kuch samajh nahi aa raha", "kuch samajh nahi aa raha help", "kuch samajh nahi"]:
+            return {
+                "issue_id": "SYS-CLARIFY-001",
+                "root_cause": "Insufficient information to pinpoint root cause",
+                "intent": "INSUFFICIENT_INFORMATION",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": "Bhai, aapko system me kya problem aa rahi hai? Thoda specific batao (jaise internet nahi chal raha, CPU 100% hai, sound gayab hai, ya koi specific error code aa raha hai?), taaki main exact diagnostic chala saku.",
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 5. Fallback to standard deterministic diagnosis
         tool_calls = [{"tool_id": "system.inspect_resources", "arguments": {"limit": 8}}]
         comp = ToolExecutor.compile_tool_calls(tool_calls)
         actions = [{"description": a["description"], "command": a["command"]} for a in comp.actions]
         return {
             "issue_id": "SYS-GEN-001",
-            "root_cause": "General system inspection",
+            "root_cause": "General system telemetry inspection",
             "intent": "SYSTEM_INFO_REQUEST",
             "risk_level": "LOW",
             "risk_color": "GREEN",
-            "summary": "General non-destructive system status inspection.",
+            "summary": "Bhai, aapke system ki live telemetry aur resource state inspect kar rahe hain:",
             "actions": actions,
             "verification_command": "$true",
             "requires_confirmation": False

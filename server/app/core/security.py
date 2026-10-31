@@ -1,7 +1,9 @@
+import os
 import time
 import secrets
 import hmac
 import hashlib
+from pathlib import Path
 from typing import Dict, Tuple
 
 class SecurityManager:
@@ -12,8 +14,12 @@ class SecurityManager:
     3. Payload Size Guard
     """
     
-    # Secret seed for token generation (rotates per process lifecycle or from env)
-    _SERVER_SECRET = secrets.token_hex(32)
+    # Secret seed for token generation (persists across workers from env or stable installation seed)
+    _SERVER_SECRET = (
+        os.getenv("SECURITY_SECRET", "").strip()
+        or os.getenv("SESSION_SECRET", "").strip()
+        or hashlib.sha256(f"KRONOS_STABLE_SALT_{Path(__file__).resolve().parent}".encode()).hexdigest()
+    )
     
     # In-memory IP rate limiter: {ip: [timestamps]}
     _RATE_LIMITS: Dict[str, list] = {}
