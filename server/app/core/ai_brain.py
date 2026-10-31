@@ -1,45 +1,65 @@
+MASTER_SYSTEM_INSTRUCTION = r"""You are KRONOS — the Autonomous Windows Systems Administrator, Diagnostic Co-Pilot, and technical partner for 'Professor' (or 'bhai').
+You possess comprehensive mastery over Windows 10 & 11, CMD, native PowerShell cmdlets, and internal Windows subsystems.
 
-MASTER_SYSTEM_INSTRUCTION = """You are KRONOS — the ultimate autonomous Windows Systems Administrator, Diagnostic Co-Pilot, and technical partner for 'Professor' (or 'bhai').
-You possess comprehensive mastery over all Windows CMD commands, utilities, and native PowerShell cmdlets across Windows 10 and Windows 11.
+LEVEL 2 CONTROLLED AUTONOMY RULES:
+1. AUTONOMY TIERS:
+   - LOW RISK (Read-Only & Safe Inspections): Automatically executable. Examples: ping, nslookup, inspecting services, checking disks, testing DNS, querying event logs.
+   - MODERATE RISK (Safe Non-Destructive Resets): Requires user confirmation. Examples: flushing DNS cache, clearing temp files, restarting non-critical services (AudioSrv, spooler), restarting network adapters.
+   - HIGH RISK (Potentially Disruptive / Process Termination): Requires explicit confirmation and clear warning. Examples: terminating non-responsive processes, killing apps.
+   - PROHIBITED (Destructive & Unrecoverable): NEVER execute or recommend formatting drives, deleting C:\Windows, running cipher on system roots, dropping security profiles, or disabling Windows Defender permanently.
 
-HUMAN PERSONA & INTERACTION PHILOSOPHY:
-1. NATURAL TECH PARTNER:
+2. STRUCTURED TOOL CALLING (CRITICAL):
+   Whenever the user requests diagnostic, troubleshooting, or remediation actions, select from the REGISTERED SYSTEM TOOLS below using "selected_tools":
+   "selected_tools": [
+       {"tool_id": "network.inspect_adapters", "arguments": {}},
+       {"tool_id": "network.test_dns", "arguments": {"domain": "google.com"}}
+   ]
+   Never output arbitrary unvalidated PowerShell scripts if a registered tool can perform the task.
+   Ensure arguments match the tool's parameter types strictly.
+
+3. HUMAN PERSONA & INTERACTION:
    - Talk like a sharp, knowledgeable, and reliable technical wingman sitting right beside the user in the terminal.
    - Converse in natural, modern conversational Hinglish (or English if the user writes in English). Use natural words: "bhai", "Professor", "arre", "dekho", "tension mat lo", "ho gaya", "bilkul".
    - NEVER sound like a robotic corporate bot. Do not use phrases like "As an AI model", "Please provide detailed log", or formal bureaucratic language.
    - When answering technical questions, explain concepts clearly, accurately, and concisely.
 
-2. ABSOLUTE COMMAND & SYSTEM ACCESS MASTERY:
-   You understand the complete architecture of Windows CMD and PowerShell:
-   - NETWORKING: ipconfig (/all, /flushdns, /release, /renew), ping (-t, -n), tracert, pathping, nslookup, route, arp, netstat (-ano, -b), netsh (interface ip, wlan show profiles, wlan show profile name= key=clear, advfirewall), Test-NetConnection, Get-NetAdapter, Get-NetIPAddress, Resolve-DnsName, Disable-NetAdapter, Enable-NetAdapter.
-   - PROCESS & TASK MANAGEMENT: tasklist (/v, /svc, /m), taskkill (/f, /im, /pid), Get-Process, Stop-Process (-Force), Start-Process, Wait-Process.
-   - STORAGE & FILE INTEGRITY: chkdsk (/f, /r, /scan), chkntfs, fsutil, diskpart, defrag, robocopy, compact, cipher, Get-Volume, Get-Disk, Get-Partition, Repair-Volume.
-   - SYSTEM REPAIR & SERVICING: sfc /scannow, dism /online /cleanup-image /restorehealth, dism /online /cleanup-image /checkhealth, reagentc /info.
-   - SERVICES & DRIVERS: sc (query, start, stop, config), net start/stop, Get-Service, Start-Service, Stop-Service, Restart-Service, Set-Service, driverquery (/v, /fo csv).
-   - HARDWARE & POWER: powercfg (/batteryreport, /energy, /getactivescheme, /setactive), Get-CimInstance Win32_Battery, Win32_Processor, Win32_VideoController, Win32_PhysicalMemory, Get-PnpDevice (-Status Error).
-   - SECURITY & FIREWALL: netsh advfirewall (set allprofiles state on/off, reset), Get-NetFirewallProfile, Set-NetFirewallProfile, Get-MpComputerStatus, Start-MpScan (-ScanType QuickScan).
-   - SYSTEM INFO & REGISTRY: systeminfo, msinfo32, dxdiag, reg (query, add, delete), Get-ItemProperty, Set-ItemProperty.
-   - BUILT-IN TUIs: KRONOS features interactive minimalist TUI dashboards:
-     /wifi (Network Radar), /disk (Storage Heatmap), /specs (Fastfetch specs), /top (Resource monitor), /tree (File explorer), /power (Power/Battery Cockpit), /services (Interactive Services Manager), /firewall (Firewall Cockpit), /devices (Hardware & Driver audit), /ports (Port monitor), /audio (Sound subsystem reset), /matrix (Screensaver).
+4. DYNAMIC ADAPTER & PATH ACCURACY:
+   - Never hardcode adapter name as "Wi-Fi" without verifying. Many systems use USB tethering or PCIe Ethernet.
+   - Never hallucinate file paths.
 
-3. STRICT ANTI-HALLUCINATION & PRECISION GUARDRAILS:
-   - CRITICAL: NEVER hallucinate file openings or launch Explorer/apps unless the user EXPLICITLY asks to open, view, or play a specific file/app.
-   - If the user asks to run a command, diagnose an issue, or asks a technical question ("ye kya hai", "kaise kare"), NEVER search for files and NEVER open arbitrary media or documents!
-   - DYNAMIC ADAPTER DETECTION: Never hardcode adapter name as "Wi-Fi" without verifying. Many systems use USB tethering ("Ethernet 2") or PCIe adapters. Always use dynamic filtering: Get-NetAdapter | Where-Object { $_.InterfaceDescription -notmatch 'VMware|Loopback' }.
-   - CONVERSATIONAL RESPECT: When the user is acknowledging ("ok", "theek he", "acha"), greeting ("hi", "namaste"), or chilling, set 'actions': [] (empty array) and respond warmly in 'summary'. Never force unsolicited scans!
-   - DIRECT SHELL TIP: Remind the user they can execute any CMD or PowerShell command directly by typing '!<cmd>', '><cmd>', or standard commands like 'ipconfig', 'tasklist', 'Get-Service'.
+5. CONVERSATIONAL RESPECT:
+   - When the user is acknowledging ("ok", "theek he", "acha"), greeting ("hi", "namaste"), or chilling, set "selected_tools": [] and "actions": [] (empty array) and respond warmly in "summary". Never force unsolicited scans!
+
+6. SUMMARY TENSE & PRESENTATION RULES (CRITICAL):
+   - For LOW-RISK AUTONOMOUS TOOLS (inspections, checks, pings, queries):
+     The commands execute immediately and the live output is displayed right below your message!
+     Therefore, NEVER speak in future tense saying "Pehle main ye nikalta hoon", "Aao ab test karte hain", or "Pehle ye check karte hain".
+     Instead, introduce the live results directly in completed / presenting action tense:
+     Examples:
+     "Bhai, live network diagnostics check kar liye hain — ye raha adapter status, DNS lookup aur ping latency report:"
+     "Bhai, system hardware aur specs ka live status ye raha:"
+     "Bhai, active listening ports aur processes audit kar liye hain:"
+   - For MODERATE & HIGH-RISK TOOLS (requires confirmation):
+     Clearly state what issue is suspected, what will be changed, and ask for explicit confirmation before execution:
+     "Bhai, DNS cache stale lag raha hai. Kya main DNS flush aur IP renew execute kar doon?"
+   - For GENERAL CHITCHAT or QUESTIONS (zero tools):
+     Answer directly and warmly.
+   - ENCODING SAFETY:
+     Strictly use standard ASCII hyphens (-) and plain characters. Never use unicode dashes (\u2011, \u2013, \u2014) or strange characters that corrupt on Windows terminal (e.g. avoid 'lowârisk').
 
 OUTPUT FORMAT (Strictly valid JSON, no markdown code block backticks outside JSON):
 {
   "issue_id": "SYS-TAG-001",
   "root_cause": "Technical cause, query classification, or conversation topic",
-  "risk_level": "INFO | LOW | MEDIUM | HIGH",
-  "risk_color": "CYAN | GREEN | YELLOW | RED",
+  "intent": "TROUBLESHOOTING_REQUEST | ACTION_REQUEST | SYSTEM_INFO_REQUEST | TECHNICAL_EXPLANATION | GREETING_CHITCHAT",
+  "risk_level": "LOW | MODERATE | HIGH",
   "summary": "Warm, natural, technically accurate response in Hinglish/English",
-  "actions": [
-    {"description": "Clear step description", "command": "PowerShell command or script block"}
+  "selected_tools": [
+    {"tool_id": "tool_id_from_registry", "arguments": {"param": "value"}}
   ],
-  "verification_command": "$true"
+  "actions": [],
+  "verification_command": "$true",
+  "requires_confirmation": false
 }
 """
 
@@ -52,6 +72,12 @@ from typing import Dict, Any, List, Optional
 import httpx
 from .guardrail import CommandGuardrail
 from .skills.registry import SkillsRegistry
+from .tools.registry import ToolRegistry
+from .tools.executor import ToolExecutor
+from .intent.hinglish import HinglishProcessor
+from .intent.classifier import IntentClassifier
+from .rag.knowledge_base import KnowledgeBase
+from .memory.store import MemoryStore
 
 try:
     from dotenv import load_dotenv
@@ -66,12 +92,34 @@ except ImportError:
 
 class AIBrain:
     """
-    Multi-Provider AI Diagnostic Engine.
+    Multi-Provider AI Diagnostic Engine with Level 2 Controlled Autonomy.
     Supports:
-    1. Groq (Ultra-low latency reasoning with JSON mode)
-    2. Gemini (gemini-2.5-flash)
-    3. Embedded SysAdmin Rule Engine (Offline fallback)
+    1. Groq (Ultra-low latency reasoning with JSON mode & structured tool calling)
+    2. Gemini (gemini-2.5-flash with symmetric context & structured tool calling)
+    3. Embedded SysAdmin Rule Engine (Offline fallback via SkillsRegistry & ToolExecutor)
     """
+
+    def __init__(self):
+        MemoryStore.initialize()
+        self._client: Optional[httpx.AsyncClient] = None
+
+    async def get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(timeout=12.0)
+        return self._client
+
+    async def close(self):
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+
+    @classmethod
+    def build_tools_instruction(cls) -> str:
+        schemas = ToolRegistry.get_schemas()
+        lines = ["REGISTERED SYSTEM TOOLS (Select tools via 'selected_tools'):"]
+        for s in schemas:
+            params = ", ".join(f"{p} ({info.get('type', 'string')})" for p, info in s["parameters"].items())
+            lines.append(f"- {s['tool_id']} [Risk: {s['risk']}]: {s['description']} | Parameters: {{{params}}}")
+        return "\n".join(lines)
 
     @property
     def groq_api_key(self) -> str:
@@ -87,7 +135,6 @@ class AIBrain:
         models = []
         if custom_model:
             models.append(custom_model)
-        # SOTA fast chat completion models on Groq
         defaults = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"]
         for m in defaults:
             if m not in models:
@@ -1811,72 +1858,220 @@ class AIBrain:
 
         return None
 
-    async def diagnose(self, problem: str, telemetry: Dict[str, Any], history: Optional[List[Dict[str, Any]]] = None, last_output: Optional[str] = None) -> Dict[str, Any]:
-        # 1. Pure conversational & chit-chat handler (ZERO ACTIONS, NO COMMANDS)
-        chat_plan = self._check_conversational_query(problem)
+    async def diagnose(
+        self,
+        problem: str,
+        telemetry: Dict[str, Any],
+        history: Optional[List[Dict[str, Any]]] = None,
+        last_output: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Level 2 Controlled Autonomy Diagnostic Coordinator.
+        """
+        # Step 1: Resolve pronoun references (e.g. "ise fix karo", "isko band kar")
+        resolved_problem, detected_domain = HinglishProcessor.resolve_pronoun_reference(problem, history)
+
+        # Step 2: Intent classification
+        intent_info = IntentClassifier.classify(resolved_problem, history)
+        intent = intent_info.intent.value if hasattr(intent_info.intent, "value") else str(intent_info.intent)
+
+        # Step 3: Telemetry sync to persistent memory
+        if telemetry:
+            try:
+                MemoryStore.update_system_profile(telemetry)
+            except Exception:
+                pass
+
+        # Step 4: Handle conversational, chit-chat, cancellations, & ambiguities immediately
+        chat_plan = self._check_conversational_query(resolved_problem)
         if chat_plan:
             return chat_plan
 
-        # 2. Interactive TUI requests (/wifi, /disk, /specs, /top, /tree, /ports, /audio)
-        tui_plan = self._check_tui_request(problem)
+        if intent == "GREETING_CHITCHAT":
+            return {
+                "issue_id": "SYS-CHITCHAT",
+                "root_cause": "Greeting or casual chatter",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": "Hi Professor! Kaise ho bhai? Main KRONOS hoon, aapka autonomous Windows Co-Pilot. Koi diagnostic, system cleanup, network issue ya query ho toh batao!",
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        if intent == "CANCELLATION":
+            return {
+                "issue_id": "SYS-CANCEL",
+                "root_cause": "User requested operation cancellation",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": "Theek hai bhai, koi changes execute nahi honge. Mast chill karo!",
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        if intent == "AMBIGUOUS_QUERY":
+            return {
+                "issue_id": "SYS-AMBIGUOUS",
+                "root_cause": "User query lacks specific system component or target",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": "Bhai, query thodi unclear lag rahi hai. Aap kya diagnose ya fix karna chahte ho? Jaise ki: internet speed, high RAM/CPU usage, audio issue, ya disk cleanup?",
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # Step 5: Built-in Interactive TUIs and specialized system operations
+        tui_plan = self._check_tui_request(resolved_problem)
         if tui_plan:
             return tui_plan
 
-        # 2. Smart network adapter on/off requests
-        net_plan = self._check_network_control_request(problem, history=history)
+        net_plan = self._check_network_control_request(resolved_problem, history=history)
         if net_plan:
             return net_plan
 
-        # 2.5 Smart process kill handler (kill, close, terminate app)
-        kill_plan = self._check_kill_request(problem)
+        kill_plan = self._check_kill_request(resolved_problem)
         if kill_plan:
             return kill_plan
 
-        # 3. Always intercept Universal Open, Delete & Find actions instantly — even during active multi-turn chat!
-        open_plan = self._check_open_request(problem, last_output=last_output, history=history)
+        open_plan = self._check_open_request(resolved_problem, last_output=last_output, history=history)
         if open_plan:
             return open_plan
 
-        delete_plan = self._check_delete_request(problem)
+        delete_plan = self._check_delete_request(resolved_problem)
         if delete_plan:
             return delete_plan
 
-        find_plan = self._check_find_request(problem)
+        find_plan = self._check_find_request(resolved_problem)
         if find_plan:
             return find_plan
 
-        # Fast-Path: Only for standalone direct queries without conversational context
         if not history:
-            fast_plan = self._check_fast_path(problem)
+            fast_plan = self._check_fast_path(resolved_problem)
             if fast_plan:
                 return fast_plan
 
-        # Priority 1: Groq (Blazing fast)
+        # Step 6: Query AI Providers or Fallback
+        plan: Optional[Dict[str, Any]] = None
+
+        # Provider 1: Groq Cloud
         if self.groq_api_key:
             try:
-                return await self._query_groq(problem, telemetry, history=history, last_output=last_output)
+                plan = await self._query_groq(
+                    resolved_problem,
+                    telemetry,
+                    history=history,
+                    last_output=last_output,
+                    intent=intent
+                )
             except Exception as e:
                 print(f"[!] Groq inference error: {e}")
 
-        # Priority 2: Gemini
-        if self.gemini_api_key:
+        # Provider 2: Gemini
+        if not plan and self.gemini_api_key:
             try:
-                return await self._query_gemini(problem, telemetry)
+                plan = await self._query_gemini(
+                    resolved_problem,
+                    telemetry,
+                    history=history,
+                    last_output=last_output,
+                    intent=intent
+                )
             except Exception as e:
                 print(f"[!] Gemini inference error: {e}")
 
-        # Fallback: Embedded Deterministic Engine
-        return self._local_expert_engine(problem, telemetry)
+        # Fallback: Deterministic Local Expert Engine
+        if not plan:
+            plan = self._local_expert_engine(resolved_problem, telemetry)
 
-    async def _query_groq(self, problem: str, telemetry: Dict[str, Any], history: Optional[List[Dict[str, Any]]] = None, last_output: Optional[str] = None) -> Dict[str, Any]:
+        # Step 7: Structured Tool Compilation & Safety Validation
+        selected_tools = plan.get("selected_tools", [])
+        if selected_tools:
+            compilation = ToolExecutor.compile_tool_calls(selected_tools)
+            if compilation.is_valid:
+                compiled_actions = []
+                for a in compilation.actions:
+                    compiled_actions.append({
+                        "description": a["description"],
+                        "command": a["command"]
+                    })
+                plan["actions"] = compiled_actions
+                plan["risk_level"] = compilation.highest_risk
+                plan["requires_confirmation"] = (
+                    any(a.get("requires_confirmation", False) for a in compilation.actions)
+                    or compilation.highest_risk in ["MODERATE", "HIGH"]
+                )
+                if not plan.get("verification_command") or plan["verification_command"] == "$true":
+                    if compilation.actions and compilation.actions[-1].get("verification"):
+                        plan["verification_command"] = compilation.actions[-1]["verification"]
+            else:
+                plan["risk_level"] = "BLOCKED"
+                plan["risk_color"] = "RED"
+                plan["actions"] = []
+                plan["summary"] = f"Operation Blocked: {compilation.error_message}. Safety guardrails prevented execution."
+                plan["requires_confirmation"] = False
+
+        # If raw actions were supplied, sanitize through CommandGuardrail
+        raw_actions = plan.get("actions", [])
+        if raw_actions:
+            safe_actions, _ = CommandGuardrail.sanitize_plan(raw_actions)
+            plan["actions"] = safe_actions
+
+        # Assign risk color based on risk tier
+        r_tier = str(plan.get("risk_level", "LOW")).upper()
+        if r_tier == "LOW":
+            plan["risk_color"] = "GREEN"
+        elif r_tier in ["MODERATE", "MEDIUM"]:
+            plan["risk_color"] = "YELLOW"
+        else:
+            plan["risk_color"] = "RED"
+
+        # Step 8: Persist episode into MemoryStore
+        try:
+            action_descs = [a.get("description", "") for a in plan.get("actions", [])]
+            MemoryStore.record_troubleshooting(
+                issue=plan.get("issue_id", "SYS-DIAG"),
+                root_cause=plan.get("root_cause", "Diagnostic request"),
+                tools_used=action_descs,
+                outcome=plan.get("verification_command", "$true")
+            )
+        except Exception:
+            pass
+
+        return plan
+
+    async def _query_groq(
+        self,
+        problem: str,
+        telemetry: Dict[str, Any],
+        history: Optional[List[Dict[str, Any]]] = None,
+        last_output: Optional[str] = None,
+        intent: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        Inference using Groq Cloud API with OpenAI-compatible JSON endpoint.
-        Maintains conversational multi-turn context and previous command outputs.
+        Ultra-low latency inference via Groq with Level 2 Structured Tool Selection,
+        RAG Knowledge Base context, Expert Skill playbooks, and persistent memory.
         """
         system_instruction = MASTER_SYSTEM_INSTRUCTION
+        tools_instruction = self.build_tools_instruction()
         skill_context = SkillsRegistry.build_system_context(problem)
-        full_system_instruction = system_instruction + ("\n" + skill_context if skill_context else "")
-        messages = [{"role": "system", "content": full_system_instruction}]
+        rag_context = KnowledgeBase.build_rag_context(problem)
+        memory_context = MemoryStore.build_memory_context()
+
+        full_system = f"{system_instruction}\n\n{tools_instruction}"
+        if skill_context:
+            full_system += f"\n\n{skill_context}"
+        if rag_context:
+            full_system += f"\n\n{rag_context}"
+        if memory_context:
+            full_system += f"\n\n{memory_context}"
+
+        messages = [{"role": "system", "content": full_system}]
 
         if history:
             for turn in history[-10:]:
@@ -1890,9 +2085,10 @@ class AIBrain:
             user_parts.append(f"[Output from previous command on user's system]:\n```\n{last_output}\n```")
         if telemetry and not history:
             user_parts.append(f"[Host Telemetry]: {json.dumps(telemetry, default=str)}")
+        if intent:
+            user_parts.append(f"[Detected Intent]: {intent}")
         user_parts.append(f"User Query: {problem}")
-        # Crucial for Groq json_object enforcement: the word 'json' must appear in messages
-        user_parts.append("(Reply strictly as a valid JSON object)")
+        user_parts.append("(Reply strictly as a valid JSON object conforming to the required schema)")
 
         current_content = "\n\n".join(user_parts)
         messages.append({"role": "user", "content": current_content})
@@ -1902,35 +2098,30 @@ class AIBrain:
             "Content-Type": "application/json"
         }
 
+        client = await self.get_client()
         last_error = None
+
         for model in self.groq_models:
             payload = {
                 "model": model,
                 "messages": messages,
                 "response_format": {"type": "json_object"},
                 "temperature": 0.0,
-                "max_tokens": 500
+                "max_tokens": 750
             }
-
             try:
-                async with httpx.AsyncClient(timeout=7.0) as client:
-                    resp = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
-                    resp.raise_for_status()
-                    data = resp.json()
-                    raw_text = data["choices"][0]["message"]["content"].strip()
-                    
-                    # Clean markdown formatting if present
-                    if raw_text.startswith("```"):
-                        raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
-                        raw_text = re.sub(r"\s*```$", "", raw_text)
-
-                    plan = json.loads(raw_text)
-
-                    # Security Guardrail Filtering
-                    raw_actions = plan.get("actions", [])
-                    safe_actions, _ = CommandGuardrail.sanitize_plan(raw_actions)
-                    plan["actions"] = safe_actions
-                    return plan
+                resp = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                raw_text = data["choices"][0]["message"]["content"].strip()
+                if raw_text.startswith("```"):
+                    raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
+                    raw_text = re.sub(r"\s*```$", "", raw_text)
+                plan = json.loads(raw_text)
+                if plan.get("summary"):
+                    s = str(plan["summary"]).replace('\u2011', '-').replace('\u2012', '-').replace('\u2013', '-').replace('\u2014', '-').replace('â', '-')
+                    plan["summary"] = s
+                return plan
             except Exception as ex:
                 last_error = ex
                 continue
@@ -1939,116 +2130,97 @@ class AIBrain:
             raise last_error
         raise RuntimeError("No Groq model candidates succeeded.")
 
-    async def _query_gemini(self, problem: str, telemetry: Dict[str, Any]) -> Dict[str, Any]:
+    async def _query_gemini(
+        self,
+        problem: str,
+        telemetry: Dict[str, Any],
+        history: Optional[List[Dict[str, Any]]] = None,
+        last_output: Optional[str] = None,
+        intent: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
-        Inference using Google Gemini API.
+        Symmetric inference via Google Gemini with Level 2 Structured Tool Selection,
+        RAG Knowledge Base context, Expert Skill playbooks, and persistent memory.
         """
         system_instruction = MASTER_SYSTEM_INSTRUCTION
-        prompt = f"Problem: {problem}\nSystem Telemetry: {json.dumps(telemetry, default=str)}"
+        tools_instruction = self.build_tools_instruction()
+        skill_context = SkillsRegistry.build_system_context(problem)
+        rag_context = KnowledgeBase.build_rag_context(problem)
+        memory_context = MemoryStore.build_memory_context()
+
+        full_system = f"{system_instruction}\n\n{tools_instruction}"
+        if skill_context:
+            full_system += f"\n\n{skill_context}"
+        if rag_context:
+            full_system += f"\n\n{rag_context}"
+        if memory_context:
+            full_system += f"\n\n{memory_context}"
+
+        parts = [f"System Context:\n{full_system}"]
+        if history:
+            hist_str = "\n".join(f"{h.get('role', 'user').upper()}: {h.get('content', '')}" for h in history[-8:])
+            parts.append(f"Conversation History:\n{hist_str}")
+        if last_output:
+            parts.append(f"Previous Command Output:\n{last_output}")
+        if telemetry:
+            parts.append(f"Host Telemetry:\n{json.dumps(telemetry, default=str)}")
+        if intent:
+            parts.append(f"Detected Intent: {intent}")
+        parts.append(f"User Query: {problem}\n(Reply strictly as a valid JSON object)")
+
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_api_key}"
-        
         payload = {
-            "contents": [{"parts": [{"text": f"{system_instruction}\n\n{prompt}"}]}],
+            "contents": [{"parts": [{"text": "\n\n".join(parts)}]}],
             "generationConfig": {"response_mime_type": "application/json"}
         }
-        
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            resp = await client.post(url, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
-            plan = json.loads(raw_text)
-            
-            safe_actions, _ = CommandGuardrail.sanitize_plan(plan.get("actions", []))
-            plan["actions"] = safe_actions
-            return plan
+
+        client = await self.get_client()
+        resp = await client.post(url, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        if raw_text.startswith("```"):
+            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
+            raw_text = re.sub(r"\s*```$", "", raw_text)
+        plan = json.loads(raw_text)
+        return plan
 
     def _local_expert_engine(self, problem: str, telemetry: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Embedded rule engine for Windows issues powered by SkillsRegistry.
+        Offline deterministic diagnostic engine powered by SkillsRegistry and ToolRegistry.
         """
         skill = SkillsRegistry.match_skill(problem)
         if skill:
+            tool_calls = [{"tool_id": tid, "arguments": {}} for tid in skill.remediation_tools]
+            comp = ToolExecutor.compile_tool_calls(tool_calls)
+            actions = [{"description": a["description"], "command": a["command"]} for a in comp.actions] if comp.is_valid else []
+            verif = comp.actions[-1]["verification"] if (comp.actions and comp.actions[-1].get("verification")) else "$true"
+            risk_tier = comp.highest_risk if comp.is_valid else skill.risk_level
+            
             return {
                 "issue_id": skill.skill_id,
                 "root_cause": f"Matched expert diagnostic playbook: {skill.name}",
-                "risk_level": "LOW",
-                "risk_color": "CYAN",
-                "summary": skill.description,
-                "actions": skill.default_actions,
-                "verification_command": skill.default_verification
+                "intent": "TROUBLESHOOTING_REQUEST",
+                "risk_level": risk_tier,
+                "risk_color": "YELLOW" if risk_tier in ["MODERATE", "MEDIUM"] else ("RED" if risk_tier == "HIGH" else "GREEN"),
+                "summary": f"{skill.description} (Running via deterministic offline playbook)",
+                "actions": actions,
+                "verification_command": verif,
+                "requires_confirmation": skill.confirmation_required or risk_tier in ["MODERATE", "HIGH"]
             }
 
-        prob_lower = problem.lower()
-        
-        if any(k in prob_lower for k in ["audio", "sound", "speaker", "volume", "mic", "earphone"]):
-            return {
-                "issue_id": "SYS-AUDIO-401",
-                "root_cause": "Windows Audio Service (AudioSrv) or Endpoint Builder desynchronized",
-                "risk_level": "LOW",
-                "risk_color": "$CLR_GREEN",
-                "summary": "Full audio stack restart and buffer purge",
-                "actions": [
-                    {"description": "Restarting Windows Audio Endpoint Builder", "command": "Restart-Service AudioEndpointBuilder -Force"},
-                    {"description": "Restarting core Windows Audio Service", "command": "Restart-Service AudioSrv -Force"}
-                ],
-                "verification_command": "(Get-Service AudioSrv).Status -eq 'Running'"
-            }
-            
-        if any(k in prob_lower for k in ["internet", "wifi", "network", "dns", "ping", "slow net", "disconnect"]):
-            return {
-                "issue_id": "SYS-NET-102",
-                "root_cause": "DNS client cache congestion or stale adapter lease",
-                "risk_level": "LOW",
-                "risk_color": "$CLR_GREEN",
-                "summary": "DNS flush, ARP purge, and adapter renewal",
-                "actions": [
-                    {"description": "Clearing DNS Resolver cache", "command": "Clear-DnsClientCache"},
-                    {"description": "Releasing active IP assignments", "command": "ipconfig /release"},
-                    {"description": "Renewing network adapter configurations", "command": "ipconfig /renew"}
-                ],
-                "verification_command": "Test-Connection -ComputerName 1.1.1.1 -Count 1 -Quiet"
-            }
-
-        if any(k in prob_lower for k in ["update", "windows update", "0x80", "download stuck"]):
-            return {
-                "issue_id": "SYS-WUA-204",
-                "root_cause": "SoftwareDistribution update cache corruption",
-                "risk_level": "MEDIUM",
-                "risk_color": "$CLR_YELLOW",
-                "summary": "Reset Windows Update service and refresh SoftwareDistribution cache",
-                "actions": [
-                    {"description": "Stopping Windows Update service", "command": "Stop-Service wuauserv -Force"},
-                    {"description": "Stopping Background Intelligent Transfer Service", "command": "Stop-Service BITS -Force"},
-                    {"description": "Restarting Windows Update service in clean state", "command": "Start-Service wuauserv"},
-                    {"description": "Restarting BITS service", "command": "Start-Service BITS"}
-                ],
-                "verification_command": "(Get-Service wuauserv).Status -eq 'Running'"
-            }
-
-        if any(k in prob_lower for k in ["slow", "lag", "temp", "cache", "disk", "storage", "cleanup"]):
-            return {
-                "issue_id": "SYS-PERF-301",
-                "root_cause": "Temporary directory accumulation and background cache bloat",
-                "risk_level": "LOW",
-                "risk_color": "$CLR_GREEN",
-                "summary": "Automated purge of user temp files and prefetch validation",
-                "actions": [
-                    {"description": "Purging transient files from user temp directory", "command": "Remove-Item -Path \"$env:TEMP\\*\" -Recurse -Force -ErrorAction SilentlyContinue"},
-                    {"description": "Triggering Windows Component Store integrity validation", "command": "DISM /Online /Cleanup-Image /CheckHealth"}
-                ],
-                "verification_command": "$true"
-            }
-
+        # Fallback to standard deterministic diagnosis
+        tool_calls = [{"tool_id": "system.inspect_resources", "arguments": {"limit": 8}}]
+        comp = ToolExecutor.compile_tool_calls(tool_calls)
+        actions = [{"description": a["description"], "command": a["command"]} for a in comp.actions]
         return {
             "issue_id": "SYS-GEN-001",
-            "root_cause": "Uncategorized system state deviation requiring general diagnostics",
+            "root_cause": "General system inspection",
+            "intent": "SYSTEM_INFO_REQUEST",
             "risk_level": "LOW",
-            "risk_color": "$CLR_GREEN",
-            "summary": "Execute non-destructive system file validation",
-            "actions": [
-                {"description": "Flushing DNS and service states", "command": "Clear-DnsClientCache"},
-                {"description": "Validating Windows Component Store state", "command": "DISM /Online /Cleanup-Image /CheckHealth"}
-            ],
-            "verification_command": "$true"
+            "risk_color": "GREEN",
+            "summary": "General non-destructive system status inspection.",
+            "actions": actions,
+            "verification_command": "$true",
+            "requires_confirmation": False
         }

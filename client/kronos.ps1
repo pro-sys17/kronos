@@ -8,31 +8,60 @@ param(
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Color and formatting definitions (ANSI - Claude Code / Warp Minimalist Palette)
+# Console dark palette initialization (Near-black / Dark Graphite Theme)
+try {
+    [Console]::BackgroundColor = [ConsoleColor]::Black
+    [Console]::ForegroundColor = [ConsoleColor]::Gray
+} catch {}
+
+# Color and formatting definitions (ANSI - Claude Code / Warp Minimalist Dark Palette)
 $ESC = [char]27
 $CLR_RESET       = "$ESC[0m"
 $CLR_BOLD        = "$ESC[1m"
 $CLR_DIM         = "$ESC[2m"
 
-# Text hierarchy
-$CLR_WHITE       = "$ESC[97m"             # Crisp pure white
-$CLR_TEXT        = "$ESC[38;5;253m"        # Clean light text
-$CLR_MUTED       = "$ESC[38;5;244m"        # Slate gray
-$CLR_DARK        = "$ESC[38;5;238m"        # Dark border gray
+# Text hierarchy (High contrast, readable dark theme)
+$CLR_WHITE       = "$ESC[97m"              # Crisp pure white for titles & values
+$CLR_TEXT        = "$ESC[38;5;252m"         # Clean, readable light silver text
+$CLR_MUTED       = "$ESC[38;5;245m"         # Readable muted slate grey for secondary text
+$CLR_DARK        = "$ESC[38;5;240m"         # Dark graphite / subtle grey
 
-# Cards & Borders
-$CLR_USER_BORDER = "$ESC[38;5;141m"        # Soft Lavender / Purple
-$CLR_BOT_BORDER  = "$ESC[38;5;45m"         # Electric Teal / Cyan
-$CLR_SYS_BORDER  = "$ESC[38;5;240m"        # Slate subtle border
+# Cards & Borders (Graphite & Dark Charcoal)
+$CLR_USER_BORDER = "$ESC[38;5;141m"         # Soft Lavender / Purple
+$CLR_BOT_BORDER  = "$ESC[38;5;45m"          # Electric Teal / Cyan
+$CLR_SYS_BORDER  = "$ESC[38;5;239m"         # Slate graphite border
+$CLR_PANEL_TOP   = "$ESC[38;5;45m"          # Accent cyan
 
-# Accents
-$CLR_CYAN        = "$ESC[38;5;45m"         # Cyan
-$CLR_GREEN       = "$ESC[38;5;120m"        # Mint Green
-$CLR_YELLOW      = "$ESC[38;5;221m"        # Amber
-$CLR_RED         = "$ESC[38;5;203m"        # Coral Red
-$CLR_BLUE        = "$ESC[38;5;75m"         # Sky Blue
-$CLR_PURPLE      = "$ESC[38;5;141m"        # Lavender
-$CLR_GRAY        = "$ESC[38;5;244m"
+# Semantic Accents
+$CLR_CYAN        = "$ESC[38;5;45m"          # Primary accent Cyan
+$CLR_GREEN       = "$ESC[38;5;120m"         # Mint Green (Success)
+$CLR_YELLOW      = "$ESC[38;5;221m"         # Amber (Warning)
+$CLR_AMBER       = "$ESC[38;5;221m"         # Amber alias
+$CLR_RED         = "$ESC[38;5;203m"         # Coral Red (Error)
+$CLR_BLUE        = "$ESC[38;5;75m"          # Sky Blue
+$CLR_PURPLE      = "$ESC[38;5;141m"         # Lavender
+$CLR_GRAY        = "$ESC[38;5;245m"         # Slate grey
+
+# Unicode / ASCII Fallback detection
+$script:UseUnicode = $true
+try {
+    if ([Console]::OutputEncoding.CodePage -ne 65001 -and -not $env:WT_SESSION) {
+        $script:UseUnicode = $false
+    }
+} catch {
+    $script:UseUnicode = $false
+}
+
+$BOX_TL = if ($script:UseUnicode) { "╭" } else { "+" }
+$BOX_TR = if ($script:UseUnicode) { "╮" } else { "+" }
+$BOX_BL = if ($script:UseUnicode) { "╰" } else { "+" }
+$BOX_BR = if ($script:UseUnicode) { "╯" } else { "+" }
+$BOX_H  = if ($script:UseUnicode) { "─" } else { "-" }
+$BOX_V  = if ($script:UseUnicode) { "│" } else { "|" }
+$BOX_ML = if ($script:UseUnicode) { "├" } else { "+" }
+$BOX_MR = if ($script:UseUnicode) { "┤" } else { "+" }
+$PTR    = if ($script:UseUnicode) { "►" } else { ">" }
+$DOT    = if ($script:UseUnicode) { "•" } else { "*" }
 
 $BACKUP_DIR = Join-Path $env:TEMP "kronos_backups"
 $script:ConversationHistory = @()
@@ -45,68 +74,82 @@ function Get-TermWidth {
         if (-not [Console]::IsOutputRedirected -and [Console]::WindowWidth -ge 30) {
             $w = [Console]::WindowWidth - 2
             if ($w -lt 60) { return 60 }
-            if ($w -gt 130) { return 130 }
+            if ($w -gt 160) { return 160 }
             return $w
         }
     } catch {}
-    return 74
+    return 78
+}
+
+function Get-VisibleLength([string]$str) {
+    if (-not $str) { return 0 }
+    $clean = $str -replace '\x1b\[[0-9;]*[a-zA-Z]', ''
+    return $clean.Length
+}
+
+function Pad-Visible([string]$str, [int]$targetWidth, [bool]$padLeft = $false) {
+    $visLen = Get-VisibleLength $str
+    $diff = $targetWidth - $visLen
+    if ($diff -le 0) { return $str }
+    $spaces = " " * $diff
+    if ($padLeft) { return $spaces + $str } else { return $str + $spaces }
 }
 
 function Write-BoxTop($title) {
     $w = Get-TermWidth
-    $clean = $title -replace '\x1b\[[0-9;]*m', ''
-    $dashes = $w - $clean.Length - 4
+    $vis = Get-VisibleLength $title
+    $dashes = $w - $vis - 4
     if ($dashes -lt 2) { $dashes = 2 }
-    Write-Host " ${CLR_SYS_BORDER}╭─ $title " -NoNewline
-    Write-Host ("─" * $dashes) -NoNewline
+    Write-Host " ${CLR_SYS_BORDER}${BOX_TL}${BOX_H} $title " -NoNewline
+    Write-Host ("${BOX_H}" * $dashes) -NoNewline
     Write-Host "${CLR_RESET}"
 }
 
 function Write-BoxDivider($title = "") {
     $w = Get-TermWidth
     if ($title) {
-        $clean = $title -replace '\x1b\[[0-9;]*m', ''
-        $dashes = $w - $clean.Length - 4
+        $vis = Get-VisibleLength $title
+        $dashes = $w - $vis - 4
         if ($dashes -lt 2) { $dashes = 2 }
-        Write-Host " ${CLR_SYS_BORDER}├─ $title " -NoNewline
-        Write-Host ("─" * $dashes) -NoNewline
+        Write-Host " ${CLR_SYS_BORDER}${BOX_ML}${BOX_H} $title " -NoNewline
+        Write-Host ("${BOX_H}" * $dashes) -NoNewline
         Write-Host "${CLR_RESET}"
     } else {
-        Write-Host " ${CLR_SYS_BORDER}├" -NoNewline
-        Write-Host ("─" * ($w - 2)) -NoNewline
+        Write-Host " ${CLR_SYS_BORDER}${BOX_ML}" -NoNewline
+        Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
         Write-Host "${CLR_RESET}"
     }
 }
 
 function Write-BoxBottom {
     $w = Get-TermWidth
-    Write-Host " ${CLR_SYS_BORDER}╰" -NoNewline
-    Write-Host ("─" * ($w - 2)) -NoNewline
+    Write-Host " ${CLR_SYS_BORDER}${BOX_BL}" -NoNewline
+    Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
     Write-Host "${CLR_RESET}"
 }
 
 function Write-UserPromptBox {
     $w = Get-TermWidth
     $dashes = [math]::Max(2, $w - 14)
-    Write-Host " ${CLR_USER_BORDER}╭─ [YOU] " -NoNewline
-    Write-Host ("─" * $dashes) -NoNewline
+    Write-Host " ${CLR_USER_BORDER}${BOX_TL}${BOX_H} [YOU] " -NoNewline
+    Write-Host ("${BOX_H}" * $dashes) -NoNewline
     Write-Host "${CLR_RESET}"
-    Write-Host " ${CLR_USER_BORDER}╰❯ ${CLR_WHITE}" -NoNewline
+    Write-Host " ${CLR_USER_BORDER}${BOX_BL}❯ ${CLR_WHITE}" -NoNewline
 }
 
 function Write-BotBoxTop($title = "KRONOS AI") {
     $w = Get-TermWidth
-    $clean = $title -replace '\x1b\[[0-9;]*m', ''
-    $dashes = [math]::Max(2, $w - $clean.Length - 6)
-    Write-Host " ${CLR_BOT_BORDER}╭─ $title " -NoNewline
-    Write-Host ("─" * $dashes) -NoNewline
+    $vis = Get-VisibleLength $title
+    $dashes = [math]::Max(2, $w - $vis - 6)
+    Write-Host " ${CLR_BOT_BORDER}${BOX_TL}${BOX_H} $title " -NoNewline
+    Write-Host ("${BOX_H}" * $dashes) -NoNewline
     Write-Host "${CLR_RESET}"
 }
 
 function Write-BotBoxBottom {
     $w = Get-TermWidth
-    Write-Host " ${CLR_BOT_BORDER}╰" -NoNewline
-    Write-Host ("─" * ($w - 2)) -NoNewline
+    Write-Host " ${CLR_BOT_BORDER}${BOX_BL}" -NoNewline
+    Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
     Write-Host "${CLR_RESET}"
 }
 
@@ -272,21 +315,53 @@ function Show-LoginGateway {
     exit
 }
 
-function Show-Banner {
-    Clear-Host
+function Show-Banner([bool]$useVtHome = $false) {
+    if (-not $useVtHome) {
+        Clear-Host
+    } else {
+        Write-Host "$ESC[H" -NoNewline
+    }
     $t = Collect-Telemetry
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    $privBadge = if ($isAdmin) { "$CLR_GREEN● ROOT$CLR_RESET" } else { "$CLR_YELLOW○ USER$CLR_RESET" }
+    $privBadge = if ($isAdmin) { "${CLR_GREEN}[ROOT]${CLR_RESET}" } else { "${CLR_AMBER}[USER]${CLR_RESET}" }
+    $serverBadge = "${CLR_GREEN}[ONLINE]${CLR_RESET}"
+    $engineBadge = "${CLR_CYAN}[GROQ NEURAL]${CLR_RESET}"
 
-    Write-Host ""
-    Write-Host " $CLR_SYS_BORDER╭─ KRONOS CORE v3.2 $CLR_MUTED── Autonomous Windows Co-Pilot$CLR_SYS_BORDER ────────$CLR_RESET"
-    Write-Host " $CLR_SYS_BORDER│$CLR_RESET"
-    Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}Host   : ${CLR_WHITE}$($t.ComputerName.PadRight(16)) ${CLR_MUTED}RAM    : ${CLR_WHITE}$($t.TotalMemoryGB) GB${CLR_RESET}"
-    Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}Drives : ${CLR_WHITE}$($t.Drives.PadRight(16)) ${CLR_MUTED}Priv   : $privBadge${CLR_RESET}"
-    Write-Host " ${CLR_SYS_BORDER}│  ${CLR_MUTED}Server : ${CLR_CYAN}$($ServerUrl.PadRight(16)) ${CLR_MUTED}Engine : ${CLR_GREEN}● Groq Neural${CLR_RESET}"
-    Write-Host " $CLR_SYS_BORDER│$CLR_RESET"
-    Write-BoxBottom
-    Write-Host ""
+    $w = Get-TermWidth
+    $innerW = $w - 4
+    $colW = [math]::Floor($innerW / 2)
+
+    # Top border
+    $titleLeft = "${BOX_TL}${BOX_H} ${CLR_WHITE}${CLR_BOLD}KRONOS CORE v3.2${CLR_RESET} ${CLR_SYS_BORDER}"
+    $titleRight = " ${CLR_CYAN}[SYSTEM CONTROL CENTRE]${CLR_RESET} ${CLR_SYS_BORDER}${BOX_H}${BOX_TR}"
+    $midDashes = $w - (Get-VisibleLength $titleLeft) - (Get-VisibleLength $titleRight)
+    if ($midDashes -lt 2) { $midDashes = 2 }
+    Write-Host " ${CLR_SYS_BORDER}${titleLeft}" -NoNewline
+    Write-Host ("${BOX_H}" * $midDashes) -NoNewline
+    Write-Host "${titleRight}${CLR_RESET}$ESC[K"
+
+    # Row 1: Host & RAM
+    $c1 = " ${CLR_MUTED}Host     :${CLR_RESET} ${CLR_WHITE}$($t.ComputerName)${CLR_RESET}"
+    $c2 = "${CLR_MUTED}RAM       :${CLR_RESET} ${CLR_WHITE}$($t.TotalMemoryGB) GB${CLR_RESET}"
+    $row1 = (Pad-Visible $c1 $colW) + (Pad-Visible $c2 ($innerW - $colW))
+    Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$row1${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+
+    # Row 2: Drives & Privilege
+    $c3 = " ${CLR_MUTED}Drives   :${CLR_RESET} ${CLR_WHITE}$($t.Drives)${CLR_RESET}"
+    $c4 = "${CLR_MUTED}Privilege :${CLR_RESET} $privBadge"
+    $row2 = (Pad-Visible $c3 $colW) + (Pad-Visible $c4 ($innerW - $colW))
+    Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$row2${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+
+    # Row 3: Server & AI Engine
+    $c5 = " ${CLR_MUTED}Server   :${CLR_RESET} ${CLR_CYAN}$ServerUrl${CLR_RESET}"
+    $c6 = "${CLR_MUTED}AI Engine :${CLR_RESET} $engineBadge $serverBadge"
+    $row3 = (Pad-Visible $c5 $colW) + (Pad-Visible $c6 ($innerW - $colW))
+    Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$row3${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+
+    # Bottom border
+    Write-Host " ${CLR_SYS_BORDER}${BOX_BL}" -NoNewline
+    Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
+    Write-Host "${BOX_BR}${CLR_RESET}$ESC[K"
 }
 
 function Ensure-Elevation {
@@ -580,8 +655,14 @@ function Show-TaskMonitorTUI {
                     $targetPid = Read-Host
                     if ($targetPid -match '^\d+$') {
                         Stop-Process -Id [int]$targetPid -Force -ErrorAction SilentlyContinue
-                        Write-Host " ${CLR_GREEN}[✓] Process PID $targetPid terminated.${CLR_RESET}"
-                        Start-Sleep -Milliseconds 700
+                        Start-Sleep -Milliseconds 200
+                        $stillAlive = Get-Process -Id [int]$targetPid -ErrorAction SilentlyContinue
+                        if (-not $stillAlive) {
+                            Write-Host " ${CLR_GREEN}[PASS] Process PID $targetPid successfully terminated.${CLR_RESET}"
+                        } else {
+                            Write-Host " ${CLR_RED}[FAIL] Could not terminate PID $targetPid (Access Denied or System Protected).${CLR_RESET}"
+                        }
+                        Start-Sleep -Milliseconds 900
                     }
                     break
                 }
@@ -706,8 +787,14 @@ function Show-PortAuditTUI {
                     $targetPid = Read-Host
                     if ($targetPid -match '^\d+$') {
                         Stop-Process -Id [int]$targetPid -Force -ErrorAction SilentlyContinue
-                        Write-Host " ${CLR_GREEN}[✓] Process PID $targetPid terminated.${CLR_RESET}"
-                        Start-Sleep -Milliseconds 800
+                        Start-Sleep -Milliseconds 200
+                        $stillAlive = Get-Process -Id [int]$targetPid -ErrorAction SilentlyContinue
+                        if (-not $stillAlive) {
+                            Write-Host " ${CLR_GREEN}[PASS] Process PID $targetPid terminated.${CLR_RESET}"
+                        } else {
+                            Write-Host " ${CLR_RED}[FAIL] Could not terminate PID $targetPid (Access Denied or System Protected).${CLR_RESET}"
+                        }
+                        Start-Sleep -Milliseconds 900
                     }
                     break
                 }
@@ -739,7 +826,14 @@ function Show-AudioTUI {
             Write-Host " ${CLR_CYAN}[*] Restarting Windows Audio services...${CLR_RESET}"
             Restart-Service -Name "AudioEndpointBuilder" -Force -ErrorAction SilentlyContinue
             Restart-Service -Name "AudioSrv" -Force -ErrorAction SilentlyContinue
-            Write-Host " ${CLR_GREEN}[✓] Sound subsystem restarted!${CLR_RESET}"
+            Start-Sleep -Milliseconds 350
+            $chk1 = Get-Service AudioSrv -ErrorAction SilentlyContinue
+            $chk2 = Get-Service AudioEndpointBuilder -ErrorAction SilentlyContinue
+            if ($chk1.Status -eq 'Running' -and $chk2.Status -eq 'Running') {
+                Write-Host " ${CLR_GREEN}[PASS] Sound subsystem successfully restarted & running.${CLR_RESET}"
+            } else {
+                Write-Host " ${CLR_AMBER}[WARN] Audio restart reported status: AudioSrv=$($chk1.Status), AudioEndpointBuilder=$($chk2.Status)${CLR_RESET}"
+            }
             Start-Sleep -Milliseconds 900
             Show-AudioTUI
         } elseif ($k.Key -eq [ConsoleKey]::T) {
@@ -1603,30 +1697,50 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
         return
     }
 
-    # 2. Check if action requires critical confirmation
-    $isCritical = $false
-    if ($plan.risk_level -eq "CRITICAL") {
-        $isCritical = $true
+    # 2. Level 2 Controlled Autonomy: Risk Tier Assessment & Confirmation Gate
+    $requiresAuth = $false
+    $riskBadge = "LOW - AUTO"
+    $badgeColor = $CLR_GREEN
+
+    if ($plan.risk_level -eq "HIGH" -or $plan.risk_level -eq "CRITICAL") {
+        $requiresAuth = $true
+        $riskBadge = "HIGH RISK - EXPLICIT AUTHORIZATION REQUIRED"
+        $badgeColor = $CLR_RED
+    } elseif ($plan.requires_confirmation -or $plan.risk_level -eq "MODERATE" -or $plan.risk_level -eq "MEDIUM") {
+        $requiresAuth = $true
+        $riskBadge = "MODERATE RISK - CONFIRMATION REQUIRED"
+        $badgeColor = $CLR_YELLOW
     } else {
         foreach ($step in $actionsList) {
             if ($step.command -match '(?i)\b(netsh\s+int\s+ip\s+reset|bcdedit\s+/(delete|clean)|vssadmin\s+delete|del(ete)?\s+|Remove-Item\s+|rmdir\s+|format\s+[a-zA-Z]:|Clear-Disk|Initialize-Disk|Format-Volume|Remove-Partition)\b') {
-                $isCritical = $true
+                $requiresAuth = $true
+                $riskBadge = "HIGH RISK - POTENTIALLY DISRUPTIVE OPERATION"
+                $badgeColor = $CLR_RED
                 break
             }
         }
     }
 
-    if ($isCritical) {
+    if ($requiresAuth) {
         Write-Host ""
-        Write-Host " $CLR_YELLOW╭─ [!]  CONFIRMATION REQUIRED $CLR_SYS_BORDER───────────────────────────────$CLR_RESET"
-        Write-Host " $CLR_YELLOW│  $CLR_WHITE$($plan.summary)$CLR_RESET"
-        Write-Host " $CLR_YELLOW│  $CLR_RED Action is destructive and cannot be undone.$CLR_RESET"
+        Write-Host " $badgeColor╭─ [LEVEL 2 AUTONOMY] $riskBadge ───────────────────────────────$CLR_RESET"
+        if ($plan.summary) {
+            Write-Host " $badgeColor│  $CLR_WHITE$($plan.summary)$CLR_RESET"
+        }
+        Write-Host " $badgeColor│  $CLR_MUTEDPlanned Actions:$CLR_RESET"
+        foreach ($step in $actionsList) {
+            Write-Host " $badgeColor│   $CLR_CYAN• $($step.description)$CLR_RESET"
+        }
         Write-BoxBottom
-        Write-Host " ${CLR_YELLOW}Authorize execution? (y/N): ${CLR_WHITE}" -NoNewline
+        Write-Host " ${badgeColor}Authorize execution? (y/N): ${CLR_WHITE}" -NoNewline
         $choice = Read-Host
         if ($choice -ne 'y' -and $choice -ne 'Y') {
-            Write-Host " $CLR_YELLOW[*] Operation cancelled by user. Target remains untouched.$CLR_RESET"
+            Write-Host " $CLR_YELLOW[*] Operation cancelled by user. Target system untouched.$CLR_RESET"
             return
+        }
+    } else {
+        if (-not $InChatMode) {
+            Write-Host " $CLR_GREEN[*] Level 2 Autonomy: Executing safe low-risk actions...$CLR_RESET"
         }
     }
 
@@ -1688,15 +1802,44 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
         $script:LastCommandOutput = $outputItems -join "`n"
     }
 
+    # Verify Operation Result
+    if ($plan.verification_command -and $plan.verification_command -ne "$true" -and $plan.verification_command -ne "true") {
+        try {
+            $vRes = & {
+                $ErrorActionPreference = 'SilentlyContinue'
+                $sb = [ScriptBlock]::Create($plan.verification_command)
+                & $sb
+            } 2>$null
+            if (-not $InChatMode) {
+                if ($vRes -eq $false) {
+                    Write-Host " $CLR_YELLOW  |-- [!] Verification Warning: Expected state not confirmed.$CLR_RESET"
+                } else {
+                    Write-Host " $CLR_GREEN  |-- [✓] Verification: System state confirmed.$CLR_RESET"
+                }
+            }
+        } catch {
+            if (-not $InChatMode) {
+                Write-Host " $CLR_YELLOW  |-- [!] Verification check encountered a warning.$CLR_RESET"
+            }
+        }
+    }
+
     # Render results
     if ($InChatMode) {
         Write-Host ""
         Write-BotBoxTop "KRONOS"
         if ($plan.summary) {
-            Write-Host " $CLR_BOT_BORDER│ $CLR_WHITE$($plan.summary)$CLR_RESET"
+            $cleanSummary = $plan.summary -replace 'â€“', '-' -replace 'â€”', '-' -replace 'â', '-' -replace '[‑‒–—]', '-'
+            foreach ($sLine in ($cleanSummary -split "`r?`n")) {
+                if ($sLine.Trim()) {
+                    Write-Host " $CLR_BOT_BORDER│ $CLR_WHITE$sLine$CLR_RESET"
+                }
+            }
         }
         if ($outputItems.Count -gt 0) {
-            if ($plan.summary) { Write-Host " $CLR_BOT_BORDER│$CLR_RESET" }
+            Write-Host " $CLR_BOT_BORDER│$CLR_RESET"
+            Write-Host " $CLR_BOT_BORDER├─ $CLR_CYAN[LIVE SYSTEM OUTPUT] $CLR_BOT_BORDER────────────────────────────────────────$CLR_RESET"
+            Write-Host " $CLR_BOT_BORDER│$CLR_RESET"
             foreach ($line in (($script:LastCommandOutput) -split "`r?`n")) {
                 $lineDisplay = $line
                 $lineDisplay = $lineDisplay -replace '\[DIR\]', "$ESC[38;5;51m[DIR]$CLR_RESET"
@@ -2178,97 +2321,274 @@ function Start-ConversationMode($initialPrompt = $null) {
     }
 }
 
+function Show-CommandPalette {
+    $commands = @(
+        @{ Slug = "/doctor";    Name = "System Doctor 10-Point Health Audit";          Action = "doctor" },
+        @{ Slug = "/boost";     Name = "Turbo Boost & Windows Temp Cleaner";           Action = "boost" },
+        @{ Slug = "/startup";   Name = "Startup Applications & Boot Manager";          Action = "startup" },
+        @{ Slug = "/apps";      Name = "Software Update & WinGet Package Manager";     Action = "apps" },
+        @{ Slug = "/debloat";   Name = "Windows Privacy & Telemetry Debloat";          Action = "debloat" },
+        @{ Slug = "/wifi";      Name = "Network Latency & Wi-Fi Radar";                Action = "wifi" },
+        @{ Slug = "/ports";     Name = "Active Listening Ports & Process Audit";       Action = "ports" },
+        @{ Slug = "/firewall";  Name = "Windows Defender Firewall Profiles Cockpit";   Action = "firewall" },
+        @{ Slug = "/services";  Name = "Windows Services Control Cockpit";             Action = "services" },
+        @{ Slug = "/top";       Name = "Resource Monitor & Task Manager (Top Procs)";  Action = "top" },
+        @{ Slug = "/disk";      Name = "Disk SMART Health & Drive Diagnostics";        Action = "disk" },
+        @{ Slug = "/specs";     Name = "Hardware Specs & Machine Topology";            Action = "specs" },
+        @{ Slug = "/devices";   Name = "Hardware & Driver Device Inspector";           Action = "devices" },
+        @{ Slug = "/audio";     Name = "Audio Subsystem Deep Reset & Diagnostic";      Action = "audio" },
+        @{ Slug = "/tree";      Name = "Interactive File & Folder Explorer (Tree)";    Action = "tree" },
+        @{ Slug = "/matrix";    Name = "Cyber Matrix Stream Screensaver";              Action = "matrix" },
+        @{ Slug = "/voice";     Name = "Toggle Native Voice Engine (TTS)";             Action = "voice" },
+        @{ Slug = "/cli";       Name = "Install Global 'kronos' Terminal Command";     Action = "install-cli" },
+        @{ Slug = "/rollback";  Name = "Safety Rollback Recovery Engine";             Action = "rollback" },
+        @{ Slug = "/chat";      Name = "Open Autonomous AI Chatbot (Natural Chat)";    Action = "chat" },
+        @{ Slug = "/lock";      Name = "Lock Session and Prompt Security Gateway";     Action = "lock" },
+        @{ Slug = "/exit";      Name = "Terminate KRONOS Session";                     Action = "exit" }
+    )
+
+    $query = ""
+    $selectedIdx = 0
+
+    while ($true) {
+        $w = Get-TermWidth
+        $innerW = $w - 4
+        Write-Host "$ESC[H" -NoNewline
+
+        # Filter commands
+        $filtered = @($commands | Where-Object {
+            (-not $query) -or ($_.Slug -like "*$query*") -or ($_.Name -like "*$query*")
+        })
+
+        if ($selectedIdx -ge $filtered.Count) { $selectedIdx = [math]::Max(0, $filtered.Count - 1) }
+
+        # Top border
+        $topTitle = "${BOX_TL}${BOX_H} ${CLR_WHITE}${CLR_BOLD}COMMAND PALETTE${CLR_RESET} ${CLR_SYS_BORDER}"
+        $topRight = " ${CLR_CYAN}[Ctrl+K]${CLR_RESET} ${CLR_SYS_BORDER}${BOX_H}${BOX_TR}"
+        $dashes = $w - (Get-VisibleLength $topTitle) - (Get-VisibleLength $topRight)
+        if ($dashes -lt 2) { $dashes = 2 }
+        Write-Host " ${CLR_SYS_BORDER}${topTitle}" -NoNewline
+        Write-Host ("${BOX_H}" * $dashes) -NoNewline
+        Write-Host "${topRight}${CLR_RESET}$ESC[K"
+
+        # Search query row
+        $searchPrompt = "  ${CLR_CYAN}>${CLR_RESET} ${CLR_WHITE}${query}${CLR_RESET}${CLR_MUTED}_${CLR_RESET}"
+        $paddedPrompt = Pad-Visible $searchPrompt $innerW
+        Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$paddedPrompt${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+
+        # Divider
+        Write-Host " ${CLR_SYS_BORDER}${BOX_ML}" -NoNewline
+        Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
+        Write-Host "${BOX_MR}${CLR_RESET}$ESC[K"
+
+        # Render filtered list (max 10 rows)
+        $maxRows = 10
+        $startIdx = [math]::Max(0, $selectedIdx - 4)
+        $endIdx = [math]::Min($filtered.Count - 1, $startIdx + $maxRows - 1)
+
+        if ($filtered.Count -eq 0) {
+            $emptyMsg = Pad-Visible "  ${CLR_AMBER}No matching commands found.${CLR_RESET}" $innerW
+            Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$emptyMsg${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+        } else {
+            for ($i = $startIdx; $i -le $endIdx; $i++) {
+                $cmd = $filtered[$i]
+                $slugPadded = $cmd.Slug.PadRight(12)
+                if ($i -eq $selectedIdx) {
+                    $line = "  ${CLR_CYAN}${PTR} ${CLR_CYAN}${CLR_BOLD}$slugPadded${CLR_WHITE}${CLR_BOLD}$($cmd.Name)${CLR_RESET}"
+                } else {
+                    $line = "    ${CLR_MUTED}$slugPadded${CLR_TEXT}$($cmd.Name)${CLR_RESET}"
+                }
+                $paddedLine = Pad-Visible $line $innerW
+                Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$paddedLine${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+            }
+        }
+
+        # Bottom border
+        Write-Host " ${CLR_SYS_BORDER}${BOX_BL}" -NoNewline
+        Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
+        Write-Host "${BOX_BR}${CLR_RESET}$ESC[K"
+        Write-Host "  ${CLR_MUTED}Type to filter • ↑/↓: Navigate • Enter: Execute • Esc: Dismiss${CLR_RESET}$ESC[K"
+
+        # Read key
+        $key = [Console]::ReadKey($true)
+        switch ($key.Key) {
+            ([ConsoleKey]::Escape) { return $null }
+            ([ConsoleKey]::UpArrow) {
+                if ($selectedIdx -gt 0) { $selectedIdx-- }
+            }
+            ([ConsoleKey]::DownArrow) {
+                if ($selectedIdx -lt ($filtered.Count - 1)) { $selectedIdx++ }
+            }
+            ([ConsoleKey]::Enter) {
+                if ($filtered.Count -gt 0) {
+                    return $filtered[$selectedIdx].Action
+                }
+            }
+            ([ConsoleKey]::Backspace) {
+                if ($query.Length -gt 0) {
+                    $query = $query.Substring(0, $query.Length - 1)
+                    $selectedIdx = 0
+                }
+            }
+            default {
+                $char = $key.KeyChar
+                if ($char -ge 32 -and $char -le 126) {
+                    $query += $char
+                    $selectedIdx = 0
+                }
+            }
+        }
+    }
+}
+
 function Select-InteractiveMenu {
     $categories = @(
         @{
-            Key = "1"; Title = "SYSTEM HEALTH & DIAGNOSTICS"; Desc = "Doctor 10-Point Audit • Hardware & Drivers • Disks • Specs";
+            Key = "1"; Title = "SYSTEM HEALTH & DIAGNOSTICS";
+            Tag = "DIAGNOSTICS";
+            Desc = "Automated 10-Point Audit • Device Inspector • SMART Disks • Hardware Specs";
             SubItems = @(
-                @{ Key = "1"; Label = "KRONOS Doctor (10-Point Health Checkup & Auto-Fix)"; Action = "doctor" },
-                @{ Key = "2"; Label = "Hardware Inventory & Problem Driver Audit";         Action = "devices" },
-                @{ Key = "3"; Label = "Storage Partitions, S.M.A.R.T. Map & Heatmap";     Action = "disk" },
-                @{ Key = "4"; Label = "Architecture & Fastfetch Specifications";          Action = "specs" },
-                @{ Key = "b"; Label = "Back to Main Workspace";                           Action = "back" }
+                @{ Key = "1"; Label = "System Doctor 10-Point Health Audit";                   Action = "doctor" },
+                @{ Key = "2"; Label = "Hardware & Driver Device Inspector";                    Action = "devices" },
+                @{ Key = "3"; Label = "Disk SMART Health & Drive Diagnostics";                 Action = "disk" },
+                @{ Key = "4"; Label = "Hardware Specs & Machine Topology";                     Action = "specs" },
+                @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
             )
         },
         @{
-            Key = "2"; Title = "PERFORMANCE & OPTIMIZATION"; Desc = "Turbo Boost Cleaner • Live Task Monitor • Startup Apps • Power Plans";
+            Key = "2"; Title = "PERFORMANCE & OPTIMIZATION";
+            Tag = "OPTIMIZER";
+            Desc = "Turbo Boost Temp Cleaner • Task Monitor • Startup Manager • Power Cockpit";
             SubItems = @(
-                @{ Key = "1"; Label = "Turbo Boost & Deep Junk Cleaner";                  Action = "boost" },
-                @{ Key = "2"; Label = "Live Task, Process & Resource Monitor (Top)";      Action = "top" },
-                @{ Key = "3"; Label = "Windows Boot & Startup Applications Manager";      Action = "startup" },
-                @{ Key = "4"; Label = "Power Scheme & Energy Battery Cockpit";            Action = "power" },
-                @{ Key = "b"; Label = "Back to Main Workspace";                           Action = "back" }
+                @{ Key = "1"; Label = "Turbo Boost & Windows Temp Cleaner";                    Action = "boost" },
+                @{ Key = "2"; Label = "Resource Monitor & Task Manager (Top Procs)";           Action = "top" },
+                @{ Key = "3"; Label = "Startup Applications & Boot Manager";                   Action = "startup" },
+                @{ Key = "4"; Label = "Power Cockpit & Sleep / Hibernate Profiles";            Action = "power" },
+                @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
             )
         },
         @{
-            Key = "3"; Title = "NETWORK & SECURITY COCKPIT"; Desc = "Network Radar • Listening Ports • Defender Firewall • Privacy Debloat";
+            Key = "3"; Title = "NETWORK & SECURITY COCKPIT";
+            Tag = "SECURITY";
+            Desc = "Network Latency & Radar • Listening Ports • Firewall Profiles • Privacy Debloat";
             SubItems = @(
-                @{ Key = "1"; Label = "Network Latency & Wi-Fi Radar";                    Action = "wifi" },
-                @{ Key = "2"; Label = "Active Listening Ports & Process Audit";           Action = "ports" },
-                @{ Key = "3"; Label = "Windows Defender Firewall Profiles Cockpit";       Action = "firewall" },
-                @{ Key = "4"; Label = "Windows Privacy & Telemetry Debloat";              Action = "debloat" },
-                @{ Key = "b"; Label = "Back to Main Workspace";                           Action = "back" }
+                @{ Key = "1"; Label = "Network Latency & Wi-Fi Radar";                         Action = "wifi" },
+                @{ Key = "2"; Label = "Active Listening Ports & Process Audit";                Action = "ports" },
+                @{ Key = "3"; Label = "Windows Defender Firewall Profiles Cockpit";            Action = "firewall" },
+                @{ Key = "4"; Label = "Windows Privacy & Telemetry Debloat";                   Action = "debloat" },
+                @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
             )
         },
         @{
-            Key = "4"; Title = "APPS, SYSTEM TOOLS & AUDIO"; Desc = "WinGet Package Manager • Services Cockpit • Audio Reset • Folder Tree";
+            Key = "4"; Title = "APPS, SYSTEM TOOLS & AUDIO";
+            Tag = "UTILITIES";
+            Desc = "WinGet Package Manager • Services Cockpit • Audio Subsystem • Folder Tree • Matrix";
             SubItems = @(
-                @{ Key = "1"; Label = "Software Update & WinGet Package Manager";         Action = "apps" },
-                @{ Key = "2"; Label = "Windows Services Control Cockpit";                 Action = "services" },
-                @{ Key = "3"; Label = "Audio Subsystem Deep Reset & Diagnostic";          Action = "audio" },
-                @{ Key = "4"; Label = "Interactive File & Folder Explorer (Tree)";        Action = "tree" },
-                @{ Key = "5"; Label = "Cyber Matrix Stream Screensaver";                  Action = "matrix" },
-                @{ Key = "b"; Label = "Back to Main Workspace";                           Action = "back" }
+                @{ Key = "1"; Label = "Software Update & WinGet Package Manager";              Action = "apps" },
+                @{ Key = "2"; Label = "Windows Services Control Cockpit";                      Action = "services" },
+                @{ Key = "3"; Label = "Audio Subsystem Deep Reset & Diagnostic";               Action = "audio" },
+                @{ Key = "4"; Label = "Interactive File & Folder Explorer (Tree)";             Action = "tree" },
+                @{ Key = "5"; Label = "Cyber Matrix Stream Screensaver";                       Action = "matrix" },
+                @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
             )
         },
         @{
-            Key = "5"; Title = "KRONOS AI CO-PILOT & VOICE"; Desc = "Autonomous AI Chatbot • Native Voice Engine • Global CLI • Safety Rollback";
+            Key = "5"; Title = "KRONOS AI CO-PILOT & VOICE";
+            Tag = "AUTONOMOUS";
+            Desc = "Autonomous AI Co-Pilot • Native Voice Engine • Global CLI • Rollback Safety";
             SubItems = @(
-                @{ Key = "1"; Label = "Open Autonomous AI Chatbot (Natural Chat)";        Action = "chat" },
-                @{ Key = "2"; Label = "Toggle Native Voice Engine (Speech Synthesis)";    Action = "voice" },
-                @{ Key = "3"; Label = "Install Global 'kronos' Terminal Command";         Action = "install-cli" },
-                @{ Key = "4"; Label = "Safety Rollback Recovery Engine";                  Action = "rollback" },
-                @{ Key = "b"; Label = "Back to Main Workspace";                           Action = "back" }
+                @{ Key = "1"; Label = "Open Autonomous AI Chatbot (Natural Chat)";             Action = "chat" },
+                @{ Key = "2"; Label = "Toggle Native Voice Engine (Speech Synthesis)";         Action = "voice" },
+                @{ Key = "3"; Label = "Install Global 'kronos' Terminal Command";              Action = "install-cli" },
+                @{ Key = "4"; Label = "Safety Rollback Recovery Engine";                       Action = "rollback" },
+                @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
             )
         },
         @{
-            Key = "0"; Title = "LOCK / EXIT SESSION"; Desc = "Lock Session & Authorization Gateway • Exit Session";
+            Key = "0"; Title = "LOCK / EXIT SESSION";
+            Tag = "SESSION";
+            Desc = "Lock Security Gateway • Terminate Session";
             SubItems = @(
-                @{ Key = "1"; Label = "Lock Session and Prompt Security Gateway";         Action = "lock" },
-                @{ Key = "0"; Label = "Terminate KRONOS Session";                         Action = "exit" },
-                @{ Key = "b"; Label = "Back to Main Workspace";                           Action = "back" }
+                @{ Key = "1"; Label = "Lock Session and Prompt Security Gateway";              Action = "lock" },
+                @{ Key = "0"; Label = "Terminate KRONOS Session";                              Action = "exit" },
+                @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
             )
         }
     )
 
     $selectedCategoryIndex = 4 # Default highlight on KRONOS AI CO-PILOT
 
+    Clear-Host
+
     while ($true) {
-        Clear-Host
-        Show-Banner
+        try { [Console]::CursorVisible = $false } catch {}
+        Write-Host "$ESC[?25l" -NoNewline
+
+        Show-Banner -useVtHome $true
+
         $w = Get-TermWidth
-        Write-Host " $CLR_SYS_BORDER╭─ KRONOS COMMAND WORKSPACE $CLR_SYS_BORDER─────────────────────────────────────────$CLR_RESET"
-        Write-Host " $CLR_SYS_BORDER│$CLR_RESET"
+        $innerW = $w - 4
+
+        # Menu Panel Top
+        $mTitleLeft = "${BOX_TL}${BOX_H} ${CLR_WHITE}${CLR_BOLD}KRONOS WORKSPACE CONTROL CENTRE${CLR_RESET} ${CLR_SYS_BORDER}"
+        $mTitleRight = " ${CLR_CYAN}[MAIN MENU]${CLR_RESET} ${CLR_SYS_BORDER}${BOX_H}${BOX_TR}"
+        $mDashes = $w - (Get-VisibleLength $mTitleLeft) - (Get-VisibleLength $mTitleRight)
+        if ($mDashes -lt 2) { $mDashes = 2 }
+        Write-Host " ${CLR_SYS_BORDER}${mTitleLeft}" -NoNewline
+        Write-Host ("${BOX_H}" * $mDashes) -NoNewline
+        Write-Host "${mTitleRight}${CLR_RESET}$ESC[K"
+
+        Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible '' $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
 
         for ($i = 0; $i -lt $categories.Count; $i++) {
             $cat = $categories[$i]
             if ($i -eq $selectedCategoryIndex) {
-                Write-Host " $CLR_SYS_BORDER│ $CLR_GREEN❯❯ $CLR_CYAN[$($cat.Key)] $CLR_WHITE$CLR_BOLD$($cat.Title)$CLR_RESET"
-                Write-Host " $CLR_SYS_BORDER│      $CLR_MUTED$($cat.Desc)$CLR_RESET"
+                $headStr = " ${CLR_CYAN}${PTR} ${CLR_CYAN}[$($cat.Key)] ${CLR_WHITE}${CLR_BOLD}$($cat.Title)${CLR_RESET}  ${CLR_CYAN}[$($cat.Tag)]${CLR_RESET}"
+                $descStr = "       ${CLR_TEXT}$($cat.Desc)${CLR_RESET}"
             } else {
-                Write-Host " $CLR_SYS_BORDER│    $CLR_MUTED[$($cat.Key)] $CLR_TEXT$($cat.Title)$CLR_RESET"
-                Write-Host " $CLR_SYS_BORDER│      $CLR_DARK$($cat.Desc)$CLR_RESET"
+                $headStr = "    ${CLR_DARK}[$($cat.Key)] ${CLR_TEXT}$($cat.Title)${CLR_RESET}  ${CLR_DARK}[$($cat.Tag)]${CLR_RESET}"
+                $descStr = "       ${CLR_DARK}$($cat.Desc)${CLR_RESET}"
             }
-            Write-Host " $CLR_SYS_BORDER│$CLR_RESET"
+
+            Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible $headStr $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+            Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible $descStr $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+
+            if ($i -lt ($categories.Count - 1)) {
+                Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible '' $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
+            }
         }
 
-        Write-BoxBottom
-        Write-Host " $CLR_MUTED  ↑/↓: Nav • Enter: Open Category • 1-5,0: Key • c: Chat • q: Exit$CLR_RESET"
+        Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible '' $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
 
-        if ([Console]::IsInputRedirected) { return "chat" }
+        # Menu Panel Bottom
+        Write-Host " ${CLR_SYS_BORDER}${BOX_BL}" -NoNewline
+        Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
+        Write-Host "${BOX_BR}${CLR_RESET}$ESC[K"
+
+        Write-Host "  ${CLR_MUTED}↑/↓: Navigate • Enter: Select • 1-5,0: Direct Jump • Ctrl+K: Palette • c: Chat • q: Exit${CLR_RESET}$ESC[K"
+
+        if ([Console]::IsInputRedirected) {
+            try { [Console]::CursorVisible = $true } catch {}
+            Write-Host "$ESC[?25h" -NoNewline
+            return "chat"
+        }
 
         $keyInfo = [Console]::ReadKey($true)
         $chosenCat = $null
+
+        # Check for Ctrl+K
+        $isCtrlK = ($keyInfo.Key -eq [ConsoleKey]::K -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) -or ([int]$keyInfo.KeyChar -eq 11)
+        if ($isCtrlK) {
+            Clear-Host
+            $paletteAction = Show-CommandPalette
+            Clear-Host
+            if ($paletteAction) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return $paletteAction
+            }
+            continue
+        }
 
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
@@ -2296,15 +2616,33 @@ function Select-InteractiveMenu {
             ([ConsoleKey]::NumPad5) { $chosenCat = $categories[4] }
             ([ConsoleKey]::D0) { $chosenCat = $categories[5] }
             ([ConsoleKey]::NumPad0) { $chosenCat = $categories[5] }
-            ([ConsoleKey]::C) { return "chat" }
-            ([ConsoleKey]::Q) { return "exit" }
-            ([ConsoleKey]::Escape) { return "exit" }
+            ([ConsoleKey]::C) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "chat"
+            }
+            ([ConsoleKey]::Q) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "exit"
+            }
+            ([ConsoleKey]::Escape) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "exit"
+            }
+            default {
+                continue
+            }
         }
 
         if ($chosenCat) {
-            # Render Sub-Menu for the chosen category
+            Clear-Host
             $subAction = Show-SubMenu $chosenCat
+            Clear-Host
             if ($subAction -and $subAction -ne "back") {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
                 return $subAction
             }
         }
@@ -2315,54 +2653,124 @@ function Show-SubMenu($cat) {
     $selectedIndex = 0
     $subItems = $cat.SubItems
 
+    Clear-Host
+
     while ($true) {
-        Clear-Host
-        Show-Banner
+        try { [Console]::CursorVisible = $false } catch {}
+        Write-Host "$ESC[?25l" -NoNewline
+
+        Show-Banner -useVtHome $true
+
         $w = Get-TermWidth
-        Write-Host " $CLR_SYS_BORDER╭─ $($cat.Title) $CLR_SYS_BORDER────────────────────────────────────────$CLR_RESET"
-        Write-Host " $CLR_SYS_BORDER│$CLR_RESET"
+        $innerW = $w - 4
+
+        # Sub-Menu Panel Top
+        $mTitleLeft = "${BOX_TL}${BOX_H} ${CLR_WHITE}${CLR_BOLD}$($cat.Title)${CLR_RESET} ${CLR_SYS_BORDER}"
+        $mTitleRight = " ${CLR_CYAN}[MODULES]${CLR_RESET} ${CLR_SYS_BORDER}${BOX_H}${BOX_TR}"
+        $mDashes = $w - (Get-VisibleLength $mTitleLeft) - (Get-VisibleLength $mTitleRight)
+        if ($mDashes -lt 2) { $mDashes = 2 }
+        Write-Host " ${CLR_SYS_BORDER}${mTitleLeft}" -NoNewline
+        Write-Host ("${BOX_H}" * $mDashes) -NoNewline
+        Write-Host "${mTitleRight}${CLR_RESET}$ESC[K"
+
+        Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible '' $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
 
         for ($i = 0; $i -lt $subItems.Count; $i++) {
             $item = $subItems[$i]
+            $isBack = ($item.Key -eq "b")
+            $keyBadge = if ($isBack) { "[Esc/b]" } else { "[$($item.Key)]" }
+
             if ($i -eq $selectedIndex) {
-                Write-Host " $CLR_SYS_BORDER│ $CLR_GREEN❯❯ $CLR_WHITE$CLR_BOLD$($item.Label)$CLR_RESET"
+                $line = " ${CLR_CYAN}${PTR} ${CLR_CYAN}$keyBadge ${CLR_WHITE}${CLR_BOLD}$($item.Label)${CLR_RESET}"
             } else {
-                Write-Host " $CLR_SYS_BORDER│    $CLR_TEXT$($item.Label)$CLR_RESET"
+                $line = "    ${CLR_DARK}$keyBadge ${CLR_TEXT}$($item.Label)${CLR_RESET}"
             }
+            Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible $line $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
         }
 
-        Write-Host " $CLR_SYS_BORDER│$CLR_RESET"
-        Write-BoxBottom
-        Write-Host " $CLR_MUTED  ↑/↓: Nav • Enter: Select • 1-9: Key • b/Esc: Back to Main$CLR_RESET"
+        Write-Host " ${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$(Pad-Visible '' $innerW)${CLR_SYS_BORDER}${BOX_V}${CLR_RESET}$ESC[K"
 
-        if ([Console]::IsInputRedirected) { return $subItems[0].Action }
+        # Sub-Menu Panel Bottom
+        Write-Host " ${CLR_SYS_BORDER}${BOX_BL}" -NoNewline
+        Write-Host ("${BOX_H}" * ($w - 2)) -NoNewline
+        Write-Host "${BOX_BR}${CLR_RESET}$ESC[K"
+
+        Write-Host "  ${CLR_MUTED}↑/↓: Navigate • Enter: Select • 1-9: Direct Key • Esc/b: Back • Ctrl+K: Palette${CLR_RESET}$ESC[K"
+
+        if ([Console]::IsInputRedirected) {
+            try { [Console]::CursorVisible = $true } catch {}
+            Write-Host "$ESC[?25h" -NoNewline
+            return $subItems[0].Action
+        }
 
         $keyInfo = [Console]::ReadKey($true)
+
+        # Check for Ctrl+K
+        $isCtrlK = ($keyInfo.Key -eq [ConsoleKey]::K -and ($keyInfo.Modifiers -band [ConsoleModifiers]::Control)) -or ([int]$keyInfo.KeyChar -eq 11)
+        if ($isCtrlK) {
+            Clear-Host
+            $paletteAction = Show-CommandPalette
+            Clear-Host
+            if ($paletteAction) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return $paletteAction
+            }
+            continue
+        }
+
         switch ($keyInfo.Key) {
             ([ConsoleKey]::UpArrow) {
                 $selectedIndex--
                 if ($selectedIndex -lt 0) { $selectedIndex = $subItems.Count - 1 }
+                continue
             }
             ([ConsoleKey]::DownArrow) {
                 $selectedIndex++
                 if ($selectedIndex -ge $subItems.Count) { $selectedIndex = 0 }
+                continue
             }
             ([ConsoleKey]::Enter) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
                 return $subItems[$selectedIndex].Action
             }
-            ([ConsoleKey]::D1) { if ($subItems.Count -ge 1) { return $subItems[0].Action } }
-            ([ConsoleKey]::NumPad1) { if ($subItems.Count -ge 1) { return $subItems[0].Action } }
-            ([ConsoleKey]::D2) { if ($subItems.Count -ge 2) { return $subItems[1].Action } }
-            ([ConsoleKey]::NumPad2) { if ($subItems.Count -ge 2) { return $subItems[1].Action } }
-            ([ConsoleKey]::D3) { if ($subItems.Count -ge 3) { return $subItems[2].Action } }
-            ([ConsoleKey]::NumPad3) { if ($subItems.Count -ge 3) { return $subItems[2].Action } }
-            ([ConsoleKey]::D4) { if ($subItems.Count -ge 4) { return $subItems[3].Action } }
-            ([ConsoleKey]::NumPad4) { if ($subItems.Count -ge 4) { return $subItems[3].Action } }
-            ([ConsoleKey]::D5) { if ($subItems.Count -ge 5) { return $subItems[4].Action } }
-            ([ConsoleKey]::NumPad5) { if ($subItems.Count -ge 5) { return $subItems[4].Action } }
-            ([ConsoleKey]::B) { return "back" }
-            ([ConsoleKey]::Q) { return "back" }
-            ([ConsoleKey]::Escape) { return "back" }
+            ([ConsoleKey]::D1) { if ($subItems.Count -ge 1 -and $subItems[0].Key -eq "1") { return $subItems[0].Action } }
+            ([ConsoleKey]::NumPad1) { if ($subItems.Count -ge 1 -and $subItems[0].Key -eq "1") { return $subItems[0].Action } }
+            ([ConsoleKey]::D2) { if ($subItems.Count -ge 2 -and $subItems[1].Key -eq "2") { return $subItems[1].Action } }
+            ([ConsoleKey]::NumPad2) { if ($subItems.Count -ge 2 -and $subItems[1].Key -eq "2") { return $subItems[1].Action } }
+            ([ConsoleKey]::D3) { if ($subItems.Count -ge 3 -and $subItems[2].Key -eq "3") { return $subItems[2].Action } }
+            ([ConsoleKey]::NumPad3) { if ($subItems.Count -ge 3 -and $subItems[2].Key -eq "3") { return $subItems[2].Action } }
+            ([ConsoleKey]::D4) { if ($subItems.Count -ge 4 -and $subItems[3].Key -eq "4") { return $subItems[3].Action } }
+            ([ConsoleKey]::NumPad4) { if ($subItems.Count -ge 4 -and $subItems[3].Key -eq "4") { return $subItems[3].Action } }
+            ([ConsoleKey]::D5) { if ($subItems.Count -ge 5 -and $subItems[4].Key -eq "5") { return $subItems[4].Action } }
+            ([ConsoleKey]::NumPad5) { if ($subItems.Count -ge 5 -and $subItems[4].Key -eq "5") { return $subItems[4].Action } }
+            ([ConsoleKey]::D0) {
+                $item0 = $subItems | Where-Object { $_.Key -eq "0" } | Select-Object -First 1
+                if ($item0) { return $item0.Action }
+            }
+            ([ConsoleKey]::NumPad0) {
+                $item0 = $subItems | Where-Object { $_.Key -eq "0" } | Select-Object -First 1
+                if ($item0) { return $item0.Action }
+            }
+            ([ConsoleKey]::B) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "back"
+            }
+            ([ConsoleKey]::Q) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "back"
+            }
+            ([ConsoleKey]::Escape) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "back"
+            }
+            default {
+                continue
+            }
         }
     }
 }

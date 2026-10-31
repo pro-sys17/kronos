@@ -40,10 +40,56 @@ async def list_skills():
             "id": s.skill_id,
             "name": s.name,
             "description": s.description,
-            "triggers": s.triggers[:6]
+            "triggers": (s.natural_triggers[:6] if hasattr(s, "natural_triggers") else getattr(s, "triggers", [])[:6])
         }
         for s in SKILLS
     ]
+
+@router.get("/api/v1/tools")
+async def list_tools():
+    """
+    Returns registered system tools, parameters, and risk classifications.
+    """
+    from app.core.tools.registry import ToolRegistry
+    return {
+        "status": "SUCCESS",
+        "total_tools": len(ToolRegistry.list_all()),
+        "tools": ToolRegistry.get_schemas()
+    }
+
+@router.get("/api/v1/memory")
+async def get_memory_summary():
+    """
+    Returns non-sensitive persistent troubleshooting memory and profile summary.
+    """
+    from app.core.memory.store import MemoryStore
+    recent = MemoryStore.get_recent_history(limit=5)
+    return {
+        "status": "SUCCESS",
+        "recent_troubleshooting_count": len(recent),
+        "recent_episodes": [
+            {
+                "issue_summary": ep.get("issue_summary", ""),
+                "root_cause": ep.get("root_cause", ""),
+                "tools_executed": ep.get("tools_executed", ""),
+                "outcome": ep.get("outcome", ""),
+                "timestamp": ep.get("timestamp", "")
+            }
+            for ep in recent
+        ]
+    }
+
+@router.post("/api/v1/memory/clear")
+async def clear_memory():
+    """
+    Clears local persistent troubleshooting memory store.
+    """
+    from app.core.memory.store import MemoryStore
+    try:
+        MemoryStore.clear_memory()
+        return {"status": "SUCCESS", "message": "Memory store cleared successfully."}
+    except Exception as e:
+        return {"status": "ERROR", "message": str(e)}
 
 @router.get("/kronos")
 async def serve_bootstrap(request: Request):

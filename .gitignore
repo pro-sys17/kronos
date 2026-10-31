@@ -15,3 +15,7 @@ env/
 # Temp snapshots and logs
 kronos_backups/
 *.log
+
+# SQLite databases
+*.db
+*.sqlite3

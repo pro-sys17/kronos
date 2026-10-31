@@ -10,13 +10,19 @@ class CommandGuardrail:
     
     # Strictly prohibited commands and patterns
     DENY_LIST = [
-        r"\bformat(?:\.exe|\.com)?\s+[a-zA-Z]:",
+        r"(?<!Format-)\bformat(?:\.exe|\.com)?\s+[a-zA-Z]:",
+        r"\bFormat-Volume\b",
+        r"\bInitialize-Disk\b",
+        r"\bClear-Disk\b",
         r"diskpart\b",
         r"vssadmin\s+delete",
         r"bcdedit\s+/delete",
         r"reg\s+delete\s+.*system",
-        r"remove-item\s+.*c:\\windows",
-        r"rmdir\s+/s\s+/q\s+c:\\windows",
+        r"remove-item\s+.*(?:c:\\windows|[a-zA-Z]:\\?)",
+        r"rmdir\s+.*(?:c:\\windows|[a-zA-Z]:\\?)",
+        r"del(?:ete)?\s+.*(?:c:\\windows|[a-zA-Z]:\\?)",
+        r"cipher\s+/w",
+        r"Set-NetFirewallProfile.*-Enabled\s+False",
         r"net\s+user\s+.*\/add",
         r"downloadstring",
         r"invoke-webrequest.*\.exe",
