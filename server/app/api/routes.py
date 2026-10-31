@@ -6,6 +6,8 @@ from typing import Dict, Any, Optional
 
 from app.core.ai_brain import AIBrain
 from app.core.security import SecurityManager
+from app.core.tools.registry import ToolRegistry
+from app.core.authorization import OperationAuthorizer
 
 router = APIRouter()
 brain = AIBrain()
@@ -158,3 +160,72 @@ async def diagnose_problem(req: DiagnoseRequest, request: Request, x_session_tok
         session_token=token
     )
     return verdict
+
+class ExecuteToolRequest(BaseModel):
+    tool_id: str
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+    approval_ticket: Optional[str] = None
+    session_token: Optional[str] = None
+
+
+@router.post("/api/v1/execute")
+async def execute_tool(req: ExecuteToolRequest, request: Request, x_session_token: Optional[str] = Header(None)):
+    """
+    Cryptographically guarded endpoint for executing registered Windows system tools.
+    Enforces:
+    1. Client IP rate limiting
+    2. Ephemeral session signature verification
+    3. Tool existence in ToolRegistry
+    4. Strict argument type, bounds, and unexpected argument schema validation
+    5. Single-use, non-expired cryptographic approval ticket verification for modifying or MODERATE/HIGH/CRITICAL operations.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+
+    # 1. Rate Limiting Check
+    allowed, reason = SecurityManager.check_rate_limit(client_ip)
+    if not allowed:
+        raise HTTPException(status_code=429, detail=reason)
+
+    # 2. Session Signature Verification
+    token = req.session_token or x_session_token
+    if not SecurityManager.verify_session_token(token):
+        raise HTTPException(status_code=401, detail="Invalid or expired session authorization signature.")
+
+    # 3. Tool Existence Verification
+    tool = ToolRegistry.get(req.tool_id)
+    if not tool:
+        raise HTTPException(status_code=400, detail=f"Unauthorized or unknown tool ID: '{req.tool_id}'.")
+
+    # 4. Parameter Schema Validation
+    is_valid, err = tool.validate_args(req.arguments)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=f"Validation failed for tool '{req.tool_id}': {err}")
+
+    # 5. Cryptographic Approval Verification for Modifying / High-Risk Operations
+    if tool.requires_confirmation or tool.risk in ["MODERATE", "HIGH", "CRITICAL"]:
+        if not req.approval_ticket:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Operation '{req.tool_id}' ({tool.risk} risk) requires an explicit cryptographic approval ticket."
+            )
+        auth_ok, auth_err = OperationAuthorizer.verify_and_consume_ticket(
+            req.approval_ticket,
+            req.tool_id,
+            req.arguments
+        )
+        if not auth_ok:
+            raise HTTPException(status_code=403, detail=f"Authorization rejected: {auth_err}")
+
+    # 6. Generate Deterministic Command and Verification
+    cmd = tool.build_command(req.arguments)
+    verif = tool.build_verification(req.arguments)
+
+    return {
+        "status": "AUTHORIZED",
+        "tool_id": tool.tool_id,
+        "tool_name": tool.name,
+        "risk": tool.risk,
+        "command": cmd,
+        "verification": verif
+    }
+

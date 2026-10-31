@@ -1893,10 +1893,10 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
         $badgeColor = $CLR_YELLOW
     } else {
         foreach ($step in $actionsList) {
-            if ($step.command -match '(?i)\b(netsh\s+int\s+ip\s+reset|bcdedit\s+/(delete|clean)|vssadmin\s+delete|del(ete)?\s+|Remove-Item\s+|rmdir\s+|format\s+[a-zA-Z]:|Clear-Disk|Initialize-Disk|Format-Volume|Remove-Partition)\b') {
+            if ($step.requires_confirmation -or $step.risk -in @('MODERATE', 'HIGH', 'CRITICAL') -or $step.command -match '(?i)\b(netsh\s+int\s+ip\s+reset|bcdedit\s+/(delete|clean)|vssadmin\s+delete|del(ete)?\s+|Remove-Item\s+|rmdir\s+|format\s+[a-zA-Z]:|Clear-Disk|Initialize-Disk|Format-Volume|Remove-Partition)\b') {
                 $requiresAuth = $true
-                $riskBadge = "HIGH RISK - POTENTIALLY DISRUPTIVE OPERATION"
-                $badgeColor = $CLR_RED
+                $riskBadge = "MODERATE RISK - CONFIRMATION REQUIRED"
+                $badgeColor = $CLR_YELLOW
                 break
             }
         }
@@ -1908,9 +1908,18 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
         if ($plan.summary) {
             Write-Host " $badgeColor│  $CLR_WHITE$($plan.summary)$CLR_RESET"
         }
-        Write-Host " $badgeColor│  $CLR_MUTEDPlanned Actions:$CLR_RESET"
+        Write-Host " $badgeColor│  $CLR_MUTEDPlanned Registered Tool Operations:$CLR_RESET"
         foreach ($step in $actionsList) {
-            Write-Host " $badgeColor│   $CLR_CYAN• $($step.description)$CLR_RESET"
+            $tName = if ($step.tool_name) { $step.tool_name } elseif ($step.description) { $step.description } else { "Registered System Tool" }
+            $tId = if ($step.tool_id) { $step.tool_id } else { "SYSTEM" }
+            $tRisk = if ($step.risk) { $step.risk } else { $plan.risk_level }
+            Write-Host " $badgeColor│   $CLR_CYAN• $tName $CLR_WHITE[$tId] $CLR_MUTED($tRisk)$CLR_RESET"
+            if ($step.arguments) {
+                $argStr = ($step.arguments | ConvertTo-Json -Compress)
+                if ($argStr -and $argStr -ne "{}") {
+                    Write-Host " $badgeColor│     ${CLR_MUTED}Parameters: ${CLR_WHITE}$argStr${CLR_RESET}"
+                }
+            }
         }
         Write-BoxBottom
         Write-Host " ${badgeColor}Authorize execution? (y/N): ${CLR_WHITE}" -NoNewline
@@ -1940,21 +1949,61 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
         Write-Host " $CLR_GREEN[SAVED]$CLR_RESET"
     }
 
-    # Execute verified commands
+    # Execute strictly verified registered tool commands (No arbitrary Invoke-Expression)
     $outputItems = @()
 
     foreach ($step in $actionsList) {
+        $desc = if ($step.description) { $step.description } else { $step.tool_name }
         if (-not $InChatMode) {
-            Write-Host " $CLR_DARK  |-- $($step.description)...$CLR_RESET" -NoNewline
+            Write-Host " $CLR_DARK  |-- $($desc)...$CLR_RESET" -NoNewline
         }
         try {
-            $safeCmd = $step.command -replace '\bexit\s+\d+\b', '' -replace '\bexit\b', ''
-            if ($safeCmd -match '\|\s*(Where-Object|Select-Object|Sort-Object|ForEach-Object)\s*($|\|)') {
+            $executableCmd = ""
+
+            # Check if this is a registered backend tool
+            if ($step.tool_id) {
+                # Modifying or Moderate/High risk operations verify authorization ticket via backend /api/v1/execute
+                if ($step.requires_confirmation -or $step.risk -in @('MODERATE', 'HIGH', 'CRITICAL') -or $step.approval_ticket) {
+                    $execPayload = @{
+                        tool_id         = "$($step.tool_id)"
+                        arguments       = if ($step.arguments) { $step.arguments } else { @{} }
+                        approval_ticket = "$($step.approval_ticket)"
+                        session_token   = "$SessionToken"
+                    } | ConvertTo-Json -Depth 5
+
+                    $headers = @{ "X-Session-Token" = $SessionToken }
+                    $jsonBytes = [System.Text.Encoding]::UTF8.GetBytes($execPayload)
+                    $authResp = Invoke-RestMethod -Uri "$ServerUrl/api/v1/execute" -Method Post -Body $jsonBytes -Headers $headers -ContentType "application/json; charset=utf-8" -TimeoutSec 30
+                    if ($authResp.status -eq "AUTHORIZED" -and $authResp.command) {
+                        $executableCmd = $authResp.command
+                    } else {
+                        throw "Server rejected tool execution: $($authResp.status)"
+                    }
+                } else {
+                    # Low-risk read-only registered tool
+                    $executableCmd = $step.command
+                }
+            } elseif ($step.command -match '^Show-[a-zA-Z0-9]+TUI$|^Toggle-VoiceEngine$|^Install-KronosGlobalCLI$') {
+                # Safe internal TUI / CLI function dispatch
+                $executableCmd = $step.command
+            } else {
+                # Arbitrary LLM-generated shell strings without registered Tool ID are strictly blocked
+                if (-not $InChatMode) {
+                    Write-Host " $CLR_RED[BLOCKED]$CLR_RESET"
+                    Write-Host "      $CLR_RED[!] Security Violation: Arbitrary shell execution without registered Tool ID is prohibited.$CLR_RESET"
+                }
                 continue
             }
+
+            if ([string]::IsNullOrWhiteSpace($executableCmd)) {
+                continue
+            }
+
+            # Execute via isolated ScriptBlock (No raw Invoke-Expression)
+            $scriptBlock = [ScriptBlock]::Create($executableCmd)
             $cmdOutput = & {
                 $ErrorActionPreference = 'Continue'
-                Invoke-Expression $safeCmd
+                & $scriptBlock
             } 2>&1
 
             if (-not $InChatMode) {

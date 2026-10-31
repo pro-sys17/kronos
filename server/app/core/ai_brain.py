@@ -208,6 +208,7 @@ OUTPUT FORMAT (Strictly valid JSON, no markdown code block backticks outside JSO
 """
 
 import os
+import asyncio
 import json
 import re
 import difflib
@@ -222,6 +223,10 @@ from .intent.hinglish import HinglishProcessor
 from .intent.classifier import IntentClassifier
 from .rag.knowledge_base import KnowledgeBase
 from .memory.store import MemoryStore
+from .sanitizer import sanitize_output_text, safe_parse_json
+from .authorization import OperationAuthorizer
+import time
+import random
 
 try:
     from dotenv import load_dotenv
@@ -243,6 +248,17 @@ class AIBrain:
     3. Embedded SysAdmin Rule Engine (Offline fallback via SkillsRegistry & ToolExecutor)
     """
 
+    # Class-level circuit breaker tracking model quota exhaustion
+    _CIRCUIT_BREAKER_UNTIL: Dict[str, float] = {}
+
+    # Model output token limits per provider specifications
+    MODEL_MAX_TOKENS: Dict[str, int] = {
+        "qwen/qwen3.8-27b": 900,
+        "openai/gpt-oss-20b": 950,
+        "openai/gpt-oss-120b": 1000
+    }
+    DEFAULT_MAX_TOKENS: int = 900
+
     def __init__(self):
         MemoryStore.initialize()
         self._client: Optional[httpx.AsyncClient] = None
@@ -257,8 +273,74 @@ class AIBrain:
             await self._client.aclose()
 
     @classmethod
-    def build_tools_instruction(cls) -> str:
-        schemas = ToolRegistry.get_schemas()
+    def build_tools_instruction(
+        cls,
+        intent: Optional[str] = None,
+        domain: Optional[str] = None,
+        problem: Optional[str] = None
+    ) -> str:
+        """
+        Selective Context Ingestion:
+        - GREETING_CHITCHAT, TECHNICAL_EXPLANATION, COMPARISON_QUERY, AMBIGUOUS: zero tool schemas (reduces prompt by >60%).
+        - TROUBLESHOOTING_REQUEST / ACTION_REQUEST: injects ONLY relevant domain tools.
+        - Fallback: safe core tools when confidence is low.
+        """
+        # Full fallback for unparameterized invocations
+        if intent is None and domain is None and problem is None:
+            schemas = ToolRegistry.get_schemas()
+            lines = ["REGISTERED SYSTEM TOOLS (Select tools via 'selected_tools'):"]
+            for s in schemas:
+                params = ", ".join(f"{p} ({info.get('type', 'string')})" for p, info in s["parameters"].items())
+                lines.append(f"- {s['tool_id']} [Risk: {s['risk']}]: {s['description']} | Parameters: {{{params}}}")
+            return "\n".join(lines)
+
+        intent_str = str(intent).upper() if intent else ""
+        problem_str = (problem or "").strip().lower()
+
+        # Queries that must NEVER receive tool schemas
+        NO_TOOL_INTENTS = {
+            "GREETING_CHITCHAT",
+            "TECHNICAL_EXPLANATION",
+            "COMPARISON_QUERY",
+            "ACKNOWLEDGMENT",
+            "CANCELLATION",
+            "AMBIGUOUS_QUERY"
+        }
+        if intent_str in NO_TOOL_INTENTS:
+            return ""
+
+        # Additional guard for comparison queries or educational requests
+        if any(w in problem_str for w in ["difference between", " vs ", "versus", "kya fark", "kya farak", "better kaunsa"]):
+            return ""
+
+        # Domain mapping for TROUBLESHOOTING_REQUEST, ACTION_REQUEST, SYSTEM_INFO_REQUEST
+        domain_normalized = (domain or "").strip().lower()
+        if not domain_normalized and problem:
+            domain_normalized = (HinglishProcessor.detect_domain(problem) or "").lower()
+
+        categories: Optional[List[str]] = None
+        if domain_normalized in ["network", "dns", "wifi", "internet", "adapter"]:
+            categories = ["network"]
+        elif domain_normalized in ["storage", "disk", "ssd", "hdd", "space", "drive"]:
+            categories = ["storage"]
+        elif domain_normalized in ["process", "performance", "cpu", "ram", "memory", "task"]:
+            categories = ["process", "system"]
+        elif domain_normalized in ["security", "firewall", "defender", "antivirus"]:
+            categories = ["security"]
+        elif domain_normalized in ["audio", "sound", "speaker", "mic"]:
+            categories = ["audio", "service"]
+        elif domain_normalized in ["hardware", "battery", "power"]:
+            categories = ["hardware", "system"]
+        elif domain_normalized in ["service"]:
+            categories = ["service", "system"]
+        else:
+            # Safe default fallback for general troubleshooting
+            categories = ["system", "network", "storage"]
+
+        schemas = ToolRegistry.get_schemas(categories)
+        if not schemas:
+            return ""
+
         lines = ["REGISTERED SYSTEM TOOLS (Select tools via 'selected_tools'):"]
         for s in schemas:
             params = ", ".join(f"{p} ({info.get('type', 'string')})" for p, info in s["parameters"].items())
@@ -279,7 +361,8 @@ class AIBrain:
         models = []
         if custom_model:
             models.append(custom_model)
-        defaults = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b"]
+        # Phase 2 verified order: Qwen 27B -> GPT-OSS 20B -> GPT-OSS 120B
+        defaults = ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"]
         for m in defaults:
             if m not in models:
                 models.append(m)
@@ -862,13 +945,43 @@ class AIBrain:
 
         if not target or len(target) < 2 or target.lower() in ["ye", "wo", "ise", "isko", "usko", "sab", "sare", "ram", "cpu", "disk", "system", "pc", "laptop", "computer", "process", "usage"]:
             return None
-
         clean_target = target.replace("'", "").replace('"', "").replace("*", "").replace("?", "").strip()
+
+        # Reject illegal shell characters to prevent injection
+        if re.search(r"[`$;|&><\n\r]", clean_target):
+            return {
+                "issue_id": "SYS-PROCESS-KILL-BLOCKED",
+                "root_cause": f"Illegal characters detected in process target '{clean_target}'",
+                "risk_level": "BLOCKED",
+                "risk_color": "RED",
+                "summary": "Security Guardrail: Illegal shell characters detected in process termination request.",
+                "actions": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # Guard critical Windows system processes against termination
+        CRITICAL_SYSTEM_PROCESSES = {
+            "svchost", "csrss", "lsass", "smss", "wininit", "services",
+            "explorer", "system", "idle", "winlogon", "dwm", "spoolsv"
+        }
+        if clean_target.lower() in CRITICAL_SYSTEM_PROCESSES:
+            return {
+                "issue_id": "SYS-PROCESS-KILL-BLOCKED",
+                "root_cause": f"Blocked attempt to terminate critical Windows process '{clean_target}'",
+                "risk_level": "BLOCKED",
+                "risk_color": "RED",
+                "summary": f"Security Guardrail: '{clean_target}' is a critical Windows system process and cannot be terminated.",
+                "actions": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
         ps_cmd = (
             f"$procs = @(Get-Process -Name '*{clean_target}*' -ErrorAction SilentlyContinue); "
             f"if ($procs.Count -gt 0) {{ "
             f"  foreach ($pr in $procs) {{ Stop-Process -Id $pr.Id -Force -ErrorAction SilentlyContinue }}; "
-            f"  \"[✓] Successfully terminated $($procs.Count) process(es) matching '{clean_target}'.\" "
+            f"  \"[OK] Successfully terminated $($procs.Count) process(es) matching '{clean_target}'.\" "
             f"}} else {{ "
             f"  \"[!] No running process matched '{clean_target}'.\" "
             f"}}"
@@ -877,7 +990,7 @@ class AIBrain:
         return {
             "issue_id": "SYS-PROCESS-KILL",
             "root_cause": f"User requested process termination for '{clean_target}'",
-            "risk_level": "LOW",
+            "risk_level": "MODERATE",
             "risk_color": "YELLOW",
             "summary": f"'{clean_target}' process ko terminate kiya ja raha hai...",
             "actions": [
@@ -886,7 +999,8 @@ class AIBrain:
                     "command": ps_cmd
                 }
             ],
-            "verification_command": "$true"
+            "verification_command": "$true",
+            "requires_confirmation": True
         }
 
     def _check_open_request(self, problem: str, last_output: Optional[str] = None, history: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
@@ -1967,14 +2081,13 @@ class AIBrain:
         # Helper: Record chat turn into persistent memory before returning
         def _finalize_and_record(p: Dict[str, Any]) -> Dict[str, Any]:
             if p.get("summary"):
-                s = str(p["summary"])
-                s = re.sub(r'[  ​‎‏]', ' ', s)
-                s = re.sub(r'[‐‑‒–—―−]', '-', s)
-                s = re.sub(r'[‘’‚‛]', "'", s)
-                s = re.sub(r'[“”„‟]', '"', s)
-                s = s.replace('…', '...').replace('â¯', ' ').replace('â', '-')
-                s = s.replace('→', '->').replace('←', '<-').replace('•', '-')
-                p["summary"] = s
+                p["summary"] = sanitize_output_text(p["summary"])
+            if p.get("root_cause"):
+                p["root_cause"] = sanitize_output_text(p["root_cause"])
+            for act in p.get("actions", []):
+                if isinstance(act, dict) and act.get("description"):
+                    act["description"] = sanitize_output_text(act["description"])
+
             try:
                 MemoryStore.save_chat_turn(
                     session_token=session_token or "default",
@@ -2104,12 +2217,14 @@ class AIBrain:
         # Provider 1: Groq Cloud
         if self.groq_api_key:
             try:
+                detected_dom = detected_domain or intent_info.domain or HinglishProcessor.detect_domain(resolved_problem)
                 plan = await self._query_groq(
                     resolved_problem,
                     telemetry,
                     history=history,
                     last_output=last_output,
-                    intent=intent
+                    intent=intent,
+                    domain=detected_dom
                 )
             except Exception as e:
                 print(f"[!] Groq inference error: {e}")
@@ -2117,12 +2232,14 @@ class AIBrain:
         # Provider 2: Gemini
         if not plan and self.gemini_api_key:
             try:
+                detected_dom = detected_domain or intent_info.domain or HinglishProcessor.detect_domain(resolved_problem)
                 plan = await self._query_gemini(
                     resolved_problem,
                     telemetry,
                     history=history,
                     last_output=last_output,
-                    intent=intent
+                    intent=intent,
+                    domain=detected_dom
                 )
             except Exception as e:
                 print(f"[!] Gemini inference error: {e}")
@@ -2131,6 +2248,19 @@ class AIBrain:
         if not plan:
             plan = self._local_expert_engine(resolved_problem, telemetry)
 
+        # Step 6.5: Verify parser integrity metadata
+        meta = plan.get("_metadata", {})
+        if meta.get("repaired") or meta.get("truncated"):
+            plan["selected_tools"] = []
+            plan["actions"] = []
+            plan["risk_level"] = "LOW"
+            plan["requires_confirmation"] = False
+            notice = "\n\n> [!] **Safety Notice**: Automated tool execution was withheld because the model response was incomplete or required structural repair. Please re-state or clarify your request."
+            if plan.get("summary"):
+                plan["summary"] += notice
+            else:
+                plan["summary"] = notice.strip()
+
         # Step 7: Structured Tool Compilation & Safety Validation
         selected_tools = plan.get("selected_tools", [])
         if selected_tools:
@@ -2138,9 +2268,21 @@ class AIBrain:
             if compilation.is_valid:
                 compiled_actions = []
                 for a in compilation.actions:
+                    ticket = None
+                    if a.get("requires_confirmation") or a.get("risk") in ["MODERATE", "HIGH", "CRITICAL"]:
+                        ticket = OperationAuthorizer.create_ticket(a["tool_id"], a["arguments"], a["risk"])
+
                     compiled_actions.append({
+                        "tool_id": a["tool_id"],
+                        "tool_name": a["tool_name"],
+                        "arguments": a["arguments"],
                         "description": a["description"],
-                        "command": a["command"]
+                        "command": a["command"],
+                        "verification": a["verification"],
+                        "risk": a["risk"],
+                        "requires_confirmation": a["requires_confirmation"],
+                        "approval_ticket": ticket,
+                        "recovery_info": a.get("recovery_info")
                     })
                 plan["actions"] = compiled_actions
                 plan["risk_level"] = compilation.highest_risk
@@ -2157,12 +2299,17 @@ class AIBrain:
                 plan["actions"] = []
                 plan["summary"] = f"Operation Blocked: {compilation.error_message}. Safety guardrails prevented execution."
                 plan["requires_confirmation"] = False
-
-        # If raw actions were supplied, sanitize through CommandGuardrail
-        raw_actions = plan.get("actions", [])
-        if raw_actions:
-            safe_actions, _ = CommandGuardrail.sanitize_plan(raw_actions)
-            plan["actions"] = safe_actions
+        else:
+            # If no registered tools were selected, eliminate arbitrary unverified actions
+            # Only allow registered deterministic fast-path / TUI actions
+            raw_actions = plan.get("actions", [])
+            if raw_actions:
+                safe_actions, _ = CommandGuardrail.sanitize_plan(raw_actions)
+                filtered_actions = []
+                for a in safe_actions:
+                    if not a.get("command", "").startswith("# BLOCKED"):
+                        filtered_actions.append(a)
+                plan["actions"] = filtered_actions
 
         # Assign risk color based on risk tier
         r_tier = str(plan.get("risk_level", "LOW")).upper()
@@ -2193,19 +2340,31 @@ class AIBrain:
         telemetry: Dict[str, Any],
         history: Optional[List[Dict[str, Any]]] = None,
         last_output: Optional[str] = None,
-        intent: Optional[str] = None
+        intent: Optional[str] = None,
+        domain: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Ultra-low latency inference via Groq with Level 2 Structured Tool Selection,
-        RAG Knowledge Base context, Expert Skill playbooks, and persistent memory.
+        Ultra-low latency inference via Groq with Selective Context Ingestion,
+        model-specific output token limits, circuit breaker, exponential backoff,
+        and safe JSON extraction.
         """
         system_instruction = MASTER_SYSTEM_INSTRUCTION
-        tools_instruction = self.build_tools_instruction()
-        skill_context = SkillsRegistry.build_system_context(problem)
-        rag_context = KnowledgeBase.build_rag_context(problem)
+        tools_instruction = self.build_tools_instruction(intent=intent, domain=domain, problem=problem)
+
+        # Selective Context Ingestion: omit irrelevant skill/rag contexts for chitchat/cancellations
+        skill_context = ""
+        rag_context = ""
+        intent_upper = str(intent).upper() if intent else ""
+        if intent_upper not in ["GREETING_CHITCHAT", "ACKNOWLEDGMENT", "CANCELLATION", "AMBIGUOUS_QUERY"]:
+            rag_context = KnowledgeBase.build_rag_context(problem)
+            if intent_upper not in ["TECHNICAL_EXPLANATION", "COMPARISON_QUERY"]:
+                skill_context = SkillsRegistry.build_system_context(problem)
+
         memory_context = MemoryStore.build_memory_context()
 
-        full_system = f"{system_instruction}\n\n{tools_instruction}"
+        full_system = system_instruction
+        if tools_instruction:
+            full_system += f"\n\n{tools_instruction}"
         if skill_context:
             full_system += f"\n\n{skill_context}"
         if rag_context:
@@ -2244,33 +2403,78 @@ class AIBrain:
         last_error = None
 
         for model in self.groq_models:
+            now = time.time()
+            if self._CIRCUIT_BREAKER_UNTIL.get(model, 0) > now:
+                remaining = self._CIRCUIT_BREAKER_UNTIL[model] - now
+                print(f"[CIRCUIT-BREAKER] Skipping {model} (exhausted quota, cooldown: {remaining:.0f}s)")
+                continue
+
+            max_tokens = self.MODEL_MAX_TOKENS.get(model, self.DEFAULT_MAX_TOKENS)
             payload = {
                 "model": model,
                 "messages": messages,
                 "response_format": {"type": "json_object"},
                 "temperature": 0.0,
-                "max_tokens": 1200
+                "max_tokens": max_tokens
             }
-            try:
-                resp = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
-                if resp.status_code == 429:
-                    print(f"[-] Groq rate limit 429 on {model}, attempting failover...")
-                    last_error = RuntimeError(f"Groq 429 on {model}")
-                    continue
-                resp.raise_for_status()
-                data = resp.json()
-                raw_text = data["choices"][0]["message"]["content"].strip()
-                if raw_text.startswith("```"):
-                    raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
-                    raw_text = re.sub(r"\s*```$", "", raw_text)
-                plan = json.loads(raw_text)
-                if plan.get("summary"):
-                    s = str(plan["summary"]).replace('\u2011', '-').replace('\u2012', '-').replace('\u2013', '-').replace('\u2014', '-').replace('â', '-')
-                    plan["summary"] = s
-                return plan
-            except Exception as ex:
-                last_error = ex
-                continue
+
+            for attempt in range(2):
+                try:
+                    resp = await client.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
+                    if resp.status_code == 429:
+                        # Extract retry-after information
+                        retry_after = 60.0
+                        h_retry = resp.headers.get("retry-after")
+                        if h_retry:
+                            try:
+                                retry_after = float(h_retry)
+                            except ValueError:
+                                pass
+                        else:
+                            try:
+                                err_msg = resp.json().get("error", {}).get("message", "")
+                                m_m = re.search(r"try again in\s+([0-9\.]+)m([0-9\.]+)s", err_msg)
+                                if m_m:
+                                    retry_after = float(m_m.group(1)) * 60 + float(m_m.group(2))
+                                else:
+                                    m_s = re.search(r"try again in\s+([0-9\.]+)s", err_msg)
+                                    if m_s:
+                                        retry_after = float(m_s.group(1))
+                            except Exception:
+                                pass
+
+                        if retry_after > 60.0:
+                            self._CIRCUIT_BREAKER_UNTIL[model] = time.time() + retry_after
+                            print(f"[CIRCUIT-BREAKER] Tripping circuit breaker for {model} for {retry_after:.0f}s (quota exhausted). Failing over immediately...")
+                            last_error = RuntimeError(f"Groq 429 quota exhausted on {model}")
+                            break
+                        else:
+                            if attempt == 0:
+                                wait_time = min(retry_after, 4.0) + random.uniform(0.1, 0.4)
+                                print(f"[RATE-LIMIT] Temporary 429 on {model}, backing off for {wait_time:.2f}s with jitter...")
+                                await asyncio.sleep(wait_time)
+                                continue
+                            else:
+                                print(f"[RATE-LIMIT] 429 persisted on {model}, failing over to next model...")
+                                last_error = RuntimeError(f"Groq 429 persistent on {model}")
+                                break
+
+                    if resp.status_code == 400:
+                        print(f"[-] Groq HTTP 400 on {model} ({resp.text[:120]}), failing over to next candidate model...")
+                        last_error = RuntimeError(f"Groq 400 on {model}")
+                        break
+
+                    resp.raise_for_status()
+                    data = resp.json()
+                    raw_text = data["choices"][0]["message"]["content"].strip()
+                    plan = safe_parse_json(raw_text)
+                    return plan
+                except Exception as ex:
+                    last_error = ex
+                    if 'resp' in locals() and resp is not None and resp.status_code in [400, 429]:
+                        break
+                    print(f"[-] Error calling {model}: {ex}")
+                    break
 
         if last_error:
             raise last_error
@@ -2282,19 +2486,29 @@ class AIBrain:
         telemetry: Dict[str, Any],
         history: Optional[List[Dict[str, Any]]] = None,
         last_output: Optional[str] = None,
-        intent: Optional[str] = None
+        intent: Optional[str] = None,
+        domain: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Symmetric inference via Google Gemini with Level 2 Structured Tool Selection,
-        RAG Knowledge Base context, Expert Skill playbooks, and persistent memory.
+        Symmetric inference via Google Gemini with Selective Context Ingestion,
+        RAG Knowledge Base context, Expert Skill playbooks, and safe JSON extraction.
         """
         system_instruction = MASTER_SYSTEM_INSTRUCTION
-        tools_instruction = self.build_tools_instruction()
-        skill_context = SkillsRegistry.build_system_context(problem)
-        rag_context = KnowledgeBase.build_rag_context(problem)
+        tools_instruction = self.build_tools_instruction(intent=intent, domain=domain, problem=problem)
+
+        skill_context = ""
+        rag_context = ""
+        intent_upper = str(intent).upper() if intent else ""
+        if intent_upper not in ["GREETING_CHITCHAT", "ACKNOWLEDGMENT", "CANCELLATION", "AMBIGUOUS_QUERY"]:
+            rag_context = KnowledgeBase.build_rag_context(problem)
+            if intent_upper not in ["TECHNICAL_EXPLANATION", "COMPARISON_QUERY"]:
+                skill_context = SkillsRegistry.build_system_context(problem)
+
         memory_context = MemoryStore.build_memory_context()
 
-        full_system = f"{system_instruction}\n\n{tools_instruction}"
+        full_system = system_instruction
+        if tools_instruction:
+            full_system += f"\n\n{tools_instruction}"
         if skill_context:
             full_system += f"\n\n{skill_context}"
         if rag_context:
@@ -2325,35 +2539,57 @@ class AIBrain:
         resp.raise_for_status()
         data = resp.json()
         raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        if raw_text.startswith("```"):
-            raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text, flags=re.IGNORECASE)
-            raw_text = re.sub(r"\s*```$", "", raw_text)
-        plan = json.loads(raw_text)
+        plan = safe_parse_json(raw_text)
         return plan
 
-    def _local_expert_engine(self, problem: str, telemetry: Dict[str, Any]) -> Dict[str, Any]:
+    def _local_expert_engine(self, problem: str, telemetry: Dict[str, Any], intent: Optional[str] = None) -> Dict[str, Any]:
         """
         Offline deterministic diagnostic engine powered by SkillsRegistry and ToolRegistry.
         """
-        skill = SkillsRegistry.match_skill(problem)
-        if skill:
-            tool_calls = [{"tool_id": tid, "arguments": {}} for tid in skill.remediation_tools]
-            comp = ToolExecutor.compile_tool_calls(tool_calls)
-            actions = [{"description": a["description"], "command": a["command"]} for a in comp.actions] if comp.is_valid else []
-            verif = comp.actions[-1]["verification"] if (comp.actions and comp.actions[-1].get("verification")) else "$true"
-            risk_tier = comp.highest_risk if comp.is_valid else skill.risk_level
-            
-            return {
-                "issue_id": skill.skill_id,
-                "root_cause": f"Matched expert diagnostic playbook: {skill.name}",
-                "intent": "TROUBLESHOOTING_REQUEST",
-                "risk_level": risk_tier,
-                "risk_color": "YELLOW" if risk_tier in ["MODERATE", "MEDIUM"] else ("RED" if risk_tier == "HIGH" else "GREEN"),
-                "summary": f"{skill.description} (Running via deterministic offline playbook)",
-                "actions": actions,
-                "verification_command": verif,
-                "requires_confirmation": skill.confirmation_required or risk_tier in ["MODERATE", "HIGH"]
-            }
+        p_lower = problem.lower().strip()
+        is_advice = (
+            str(intent).upper() in ["TECHNICAL_EXPLANATION", "COMPARISON_QUERY"]
+            or any(w in p_lower for w in ["kya hota hai", "kya hai", "what is", "explain", "kaise kaam karta", "difference between", " vs ", "versus"])
+        )
+
+        if not is_advice:
+            skill = SkillsRegistry.match_skill(problem)
+            if skill:
+                tool_calls = [{"tool_id": tid, "arguments": {}} for tid in skill.remediation_tools]
+                comp = ToolExecutor.compile_tool_calls(tool_calls)
+                actions = []
+                if comp.is_valid:
+                    for a in comp.actions:
+                        ticket = None
+                        if a.get("requires_confirmation") or a.get("risk") in ["MODERATE", "HIGH", "CRITICAL"]:
+                            ticket = OperationAuthorizer.create_ticket(a["tool_id"], a["arguments"], a["risk"])
+                        actions.append({
+                            "tool_id": a["tool_id"],
+                            "tool_name": a["tool_name"],
+                            "arguments": a["arguments"],
+                            "description": a["description"],
+                            "command": a["command"],
+                            "verification": a["verification"],
+                            "risk": a["risk"],
+                            "requires_confirmation": a["requires_confirmation"],
+                            "approval_ticket": ticket,
+                            "recovery_info": a.get("recovery_info")
+                        })
+                verif = comp.actions[-1]["verification"] if (comp.actions and comp.actions[-1].get("verification")) else "$true"
+                risk_tier = comp.highest_risk if comp.is_valid else skill.risk_level
+
+                return {
+                    "issue_id": skill.skill_id,
+                    "root_cause": f"Matched expert diagnostic playbook: {skill.name}",
+                    "intent": "TROUBLESHOOTING_REQUEST",
+                    "risk_level": risk_tier,
+                    "risk_color": "YELLOW" if risk_tier in ["MODERATE", "MEDIUM"] else ("RED" if risk_tier == "HIGH" else "GREEN"),
+                    "summary": f"{skill.description} (Running via deterministic offline playbook)",
+                    "selected_tools": tool_calls,
+                    "actions": actions,
+                    "verification_command": verif,
+                    "requires_confirmation": skill.confirmation_required or risk_tier in ["MODERATE", "HIGH"]
+                }
 
         p_lower = problem.lower().strip()
 

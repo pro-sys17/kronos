@@ -27,6 +27,8 @@ class ToolParameter:
         if self.param_type == "int":
             try:
                 int(value)
+                if isinstance(value, str) and not re.match(r"^-?\d+$", value.strip()):
+                    return False, f"Parameter '{self.name}' must be an integer."
             except (ValueError, TypeError):
                 return False, f"Parameter '{self.name}' must be an integer."
         elif self.param_type == "bool":
@@ -38,7 +40,7 @@ class ToolParameter:
         elif self.param_type == "string":
             # Sanitize dangerous characters in string arguments to prevent injection
             val_str = str(value)
-            if re.search(r"[`$;|&><\n\r]", val_str):
+            if re.search(r"[`$;|&><\n\r'\"\x00]", val_str):
                 return False, f"Illegal characters detected in parameter '{self.name}'."
 
         return True, ""
@@ -71,6 +73,14 @@ class ToolDefinition:
         self.recovery_info = recovery_info
 
     def validate_args(self, args: Dict[str, Any]) -> Tuple_Validation:
+        if not isinstance(args, dict):
+            return False, "Arguments must be a key-value dictionary."
+
+        # Strictly reject unexpected arguments not defined in tool parameter schema
+        for k in args.keys():
+            if k not in self.parameters:
+                return False, f"Unexpected argument '{k}' provided for tool '{self.tool_id}'."
+
         for p_name, param in self.parameters.items():
             val = args.get(p_name, param.default)
             is_valid, err = param.validate(val)
@@ -129,8 +139,11 @@ class ToolRegistry:
         return list(cls._tools.values())
 
     @classmethod
-    def get_schemas(cls) -> List[Dict[str, Any]]:
-        return [t.to_schema() for t in cls._tools.values()]
+    def get_schemas(cls, categories: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        if not categories:
+            return [t.to_schema() for t in cls._tools.values()]
+        allowed_cats = {c.strip().lower() for c in categories if c}
+        return [t.to_schema() for t in cls._tools.values() if t.category.lower() in allowed_cats]
 
 
 # ------------------------------------------------------------------------------
