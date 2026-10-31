@@ -1825,7 +1825,8 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
         if ($InChatMode) {
             Write-Host ""
             Write-BotBoxTop "KRONOS"
-            foreach ($line in (($plan.summary | Out-String) -split "`r?`n")) {
+            $cleanSummary = "$($plan.summary)" -replace '[\u202F\u00A0\u200B]', ' ' -replace 'â¯', ' ' -replace 'â€“', '-' -replace 'â€”', '-' -replace 'â', '-' -replace '[‑‒–—]', '-'
+            foreach ($line in ($cleanSummary -split "`r?`n")) {
                 if ($line.Trim()) {
                     Write-Host " $CLR_BOT_BORDER│ $CLR_WHITE$line$CLR_RESET"
                 }

@@ -10,6 +10,7 @@ from .hinglish import HinglishProcessor
 
 class IntentType(str, Enum):
     GREETING_CHITCHAT = "GREETING_CHITCHAT"
+    ACKNOWLEDGMENT = "ACKNOWLEDGMENT"
     TECHNICAL_EXPLANATION = "TECHNICAL_EXPLANATION"
     SYSTEM_INFO_REQUEST = "SYSTEM_INFO_REQUEST"
     TROUBLESHOOTING_REQUEST = "TROUBLESHOOTING_REQUEST"
@@ -55,13 +56,18 @@ class IntentClassifier:
         r"\b(kuch\s+(to\s+)?(problem|dikkat|garbar|issue|kharabi)|something is wrong|system issue|help me|kuch karo|dekho na|please help)\b"
     ]
 
+    ACKNOWLEDGMENT_PATTERNS = [
+        r"\b(ye\s+)?(thik|theek|sahi)\s+(hai|he)\b",
+        r"\b(badhiya|mast|shandar|zabardast|awesome|great|perfect|cool|nice)\b",
+        r"\b(thanks|thank you|dhanyawad|shukriya|arigato)\b",
+        r"^(ok|okay|theek hai|thik hai|theek he|thik he|sahi hai|got it|samajh gaya|done|achha hai|accha hai)$"
+    ]
+
     CHITCHAT_PATTERNS = [
         r"\b(hi|hello|hey|namaste|pranam|halo|hola)\b",
         r"\b(good\s+(morning|evening|afternoon|night))\b",
         r"\b(kya haal|kaise ho|kaisa hai|how are you|wassup|sup)\b",
-        r"\b(ok|okay|theek hai|thik hai|theek he|thik he|sahi hai|badhiya|cool|nice)\b",
-        r"\b(mene kab bola|maine kab bola|mene to kuch nahi kaha|chill karo|chill marte|chill)\b",
-        r"\b(thanks|thank you|dhanyawad|shukriya|arigato)\b"
+        r"\b(mene kab bola|maine kab bola|mene to kuch nahi kaha|chill karo|chill marte|chill)\b"
     ]
 
     EXPLANATION_PATTERNS = [
@@ -109,7 +115,12 @@ class IntentClassifier:
             if re.search(pat, norm) or re.search(pat, query.lower()):
                 return IntentResult(IntentType.AMBIGUOUS_QUERY, 0.90, domain=None, normalized_query=norm)
 
-        # 4. Chit-chat / Greetings / Idle check
+        # 4. Acknowledgment & Gratitude check
+        for pat in cls.ACKNOWLEDGMENT_PATTERNS:
+            if re.search(pat, norm) or re.search(pat, query.lower()):
+                return IntentResult(IntentType.ACKNOWLEDGMENT, 0.95, domain=None, normalized_query=norm)
+
+        # 5. Chit-chat / Greetings / Idle check
         for pat in cls.CHITCHAT_PATTERNS:
             if re.search(pat, norm) or re.search(pat, query.lower()):
                 return IntentResult(IntentType.GREETING_CHITCHAT, 0.95, domain=None, normalized_query=norm)
