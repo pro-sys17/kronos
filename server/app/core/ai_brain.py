@@ -387,24 +387,6 @@ class AIBrain:
                 "verification_command": "$true"
             }
 
-
-        # Fast-path for Listening & Used Ports
-        if any(w in p for w in ["ports", "port"]) and any(w in p for w in ["dikhao", "batao", "show", "list", "use", "used", "open", "listening", "active", "check", "sare", "all"]):
-            return {
-                "issue_id": "SYS-FAST-PORTS",
-                "root_cause": "Active listening and established TCP ports query",
-                "risk_level": "LOW",
-                "risk_color": "CYAN",
-                "summary": "Ye rahe aapke active listening aur used ports! Live scrolling audit ke liye aap '/ports' TUI bhi use kar sakte ho.",
-                "actions": [
-                    {
-                        "description": "Query active listening TCP ports with process mapping",
-                        "command": "Get-NetTCPConnection -State Listen, Established -ErrorAction SilentlyContinue | Select-Object -First 15 LocalAddress, LocalPort, State, OwningProcess | Format-Table -AutoSize"
-                    }
-                ],
-                "verification_command": "$true"
-            }
-
         # Fast-path for IP Address
         if any(w in p for w in ["my ip", "ip address", "ip kya he", "ip batao", "ip check"]):
             return {
@@ -603,24 +585,6 @@ class AIBrain:
                     {
                         "description": "Scan for problem or degraded hardware devices",
                         "command": "$errs = @(Get-PnpDevice -Status Error, Degraded -ErrorAction SilentlyContinue); if ($errs.Count -gt 0) { $errs | Select-Object FriendlyName, InstanceId, Status | Format-Table -AutoSize } else { Write-Host 'All installed hardware devices are HEALTHY.' }"
-                    }
-                ],
-                "verification_command": "$true"
-            }
-
-
-        # Fast-path for Listening & Used Ports
-        if any(w in p for w in ["ports", "port"]) and any(w in p for w in ["dikhao", "batao", "show", "list", "use", "used", "open", "listening", "active", "check", "sare", "all"]):
-            return {
-                "issue_id": "SYS-FAST-PORTS",
-                "root_cause": "Active listening and established TCP ports query",
-                "risk_level": "LOW",
-                "risk_color": "CYAN",
-                "summary": "Ye rahe aapke active listening aur used ports! Live scrolling audit ke liye aap '/ports' TUI bhi use kar sakte ho.",
-                "actions": [
-                    {
-                        "description": "Query active listening TCP ports with process mapping",
-                        "command": "Get-NetTCPConnection -State Listen, Established -ErrorAction SilentlyContinue | Select-Object -First 15 LocalAddress, LocalPort, State, OwningProcess | Format-Table -AutoSize"
                     }
                 ],
                 "verification_command": "$true"
@@ -1194,24 +1158,6 @@ class AIBrain:
                 "verification_command": "$true"
             }
 
-
-        # Fast-path for Listening & Used Ports
-        if any(w in p for w in ["ports", "port"]) and any(w in p for w in ["dikhao", "batao", "show", "list", "use", "used", "open", "listening", "active", "check", "sare", "all"]):
-            return {
-                "issue_id": "SYS-FAST-PORTS",
-                "root_cause": "Active listening and established TCP ports query",
-                "risk_level": "LOW",
-                "risk_color": "CYAN",
-                "summary": "Ye rahe aapke active listening aur used ports! Live scrolling audit ke liye aap '/ports' TUI bhi use kar sakte ho.",
-                "actions": [
-                    {
-                        "description": "Query active listening TCP ports with process mapping",
-                        "command": "Get-NetTCPConnection -State Listen, Established -ErrorAction SilentlyContinue | Select-Object -First 15 LocalAddress, LocalPort, State, OwningProcess | Format-Table -AutoSize"
-                    }
-                ],
-                "verification_command": "$true"
-            }
-
         # Fast-path for IP Address
         if any(w in p for w in ["my ip", "ip address", "ip kya he", "ip batao", "ip check"]):
             return {
@@ -1363,24 +1309,6 @@ class AIBrain:
                     {
                         "description": "Scan for problem or degraded hardware devices",
                         "command": "$errs = @(Get-PnpDevice -Status Error, Degraded -ErrorAction SilentlyContinue); if ($errs.Count -gt 0) { $errs | Select-Object FriendlyName, InstanceId, Status | Format-Table -AutoSize } else { Write-Host 'All installed hardware devices are HEALTHY.' }"
-                    }
-                ],
-                "verification_command": "$true"
-            }
-
-
-        # Fast-path for Listening & Used Ports
-        if any(w in p for w in ["ports", "port"]) and any(w in p for w in ["dikhao", "batao", "show", "list", "use", "used", "open", "listening", "active", "check", "sare", "all"]):
-            return {
-                "issue_id": "SYS-FAST-PORTS",
-                "root_cause": "Active listening and established TCP ports query",
-                "risk_level": "LOW",
-                "risk_color": "CYAN",
-                "summary": "Ye rahe aapke active listening aur used ports! Live scrolling audit ke liye aap '/ports' TUI bhi use kar sakte ho.",
-                "actions": [
-                    {
-                        "description": "Query active listening TCP ports with process mapping",
-                        "command": "Get-NetTCPConnection -State Listen, Established -ErrorAction SilentlyContinue | Select-Object -First 15 LocalAddress, LocalPort, State, OwningProcess | Format-Table -AutoSize"
                     }
                 ],
                 "verification_command": "$true"
@@ -1538,6 +1466,24 @@ class AIBrain:
         Bypasses network roundtrips and delivers instantaneous sub-millisecond execution.
         """
         p = problem.lower().strip()
+        # Fast-path for Listening & Used Ports (Only for raw listing, NOT for explanations)
+        is_explain_query = any(w in p for w in ["kyu", "why", "kis kaam", "kaam", "details", "explain", "detail", "purpose", "meaning", "samjhao", "table", "matlab", "reason", "unko", "inme"])
+        if not is_explain_query and any(w in p for w in ["ports", "port"]) and any(w in p for w in ["dikhao", "show", "list", "open ports", "listening ports", "active ports"]):
+            return {
+                "issue_id": "SYS-FAST-PORTS",
+                "root_cause": "Active listening and established TCP ports query",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": "Ye rahe aapke active listening aur used ports process name mapping ke saath:",
+                "actions": [
+                    {
+                        "description": "Query active listening TCP ports with process mapping",
+                        "command": "Get-NetTCPConnection -State Listen, Established -ErrorAction SilentlyContinue | Select-Object -First 15 LocalAddress, LocalPort, State, @{Name='Process';Expression={(Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName}}, OwningProcess | Format-Table -AutoSize"
+                    }
+                ],
+                "verification_command": "$true"
+            }
+
 
         # Fast-path for Battery & Power status
         if any(w in p for w in ["battery report", "battery status", "power plan", "battery health", "battery kitni"]):
@@ -1602,24 +1548,6 @@ class AIBrain:
                     {
                         "description": "Scan for problem or degraded hardware devices",
                         "command": "$errs = @(Get-PnpDevice -Status Error, Degraded -ErrorAction SilentlyContinue); if ($errs.Count -gt 0) { $errs | Select-Object FriendlyName, InstanceId, Status | Format-Table -AutoSize } else { Write-Host 'All installed hardware devices are HEALTHY.' }"
-                    }
-                ],
-                "verification_command": "$true"
-            }
-
-
-        # Fast-path for Listening & Used Ports
-        if any(w in p for w in ["ports", "port"]) and any(w in p for w in ["dikhao", "batao", "show", "list", "use", "used", "open", "listening", "active", "check", "sare", "all"]):
-            return {
-                "issue_id": "SYS-FAST-PORTS",
-                "root_cause": "Active listening and established TCP ports query",
-                "risk_level": "LOW",
-                "risk_color": "CYAN",
-                "summary": "Ye rahe aapke active listening aur used ports! Live scrolling audit ke liye aap '/ports' TUI bhi use kar sakte ho.",
-                "actions": [
-                    {
-                        "description": "Query active listening TCP ports with process mapping",
-                        "command": "Get-NetTCPConnection -State Listen, Established -ErrorAction SilentlyContinue | Select-Object -First 15 LocalAddress, LocalPort, State, OwningProcess | Format-Table -AutoSize"
                     }
                 ],
                 "verification_command": "$true"
