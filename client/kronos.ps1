@@ -8,30 +8,59 @@ param(
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Console palette initialization (Crisp Modern Silver Grey & White Minimalist Theme)
-try {
-    [Console]::ForegroundColor = [ConsoleColor]::Gray
-} catch {}
-
-# Color and formatting definitions (ANSI - Crisp Minimalist Silver Grey & White Borders)
+# Color and formatting definitions (ANSI)
 $ESC = [char]27
 $CLR_RESET       = "$ESC[0m"
 $CLR_BOLD        = "$ESC[1m"
 $CLR_DIM         = "$ESC[2m"
 
-# Text hierarchy (High contrast, readable theme)
+# Terminal Theme Engine (Option B: Modern Dark Slate Grey Canvas Background)
+$script:KronosThemeBg = "#23272e"  # Modern Slate Grey / Dark Charcoal (#23272e)
+$script:KronosThemeFg = "#f0f3f6"  # Crisp Pure Silver/White Foreground
+$script:KronosCursorColor = "#00e5ff" # Vibrant Cyan Cursor
+
+function Set-KronosTerminalTheme {
+    param(
+        [string]$BgHex = $script:KronosThemeBg,
+        [string]$FgHex = $script:KronosThemeFg
+    )
+    try {
+        # OSC 11: Set Terminal Window Canvas Background Color
+        # OSC 10: Set Terminal Window Default Foreground Color
+        # OSC 12: Set Terminal Cursor Color
+        [Console]::Write("$ESC]11;$BgHex$ESC\$ESC]10;$FgHex$ESC\$ESC]12;$script:KronosCursorColor$ESC\")
+    } catch {}
+
+    try {
+        [Console]::ForegroundColor = [ConsoleColor]::White
+    } catch {}
+}
+
+function Restore-KronosTerminalTheme {
+    try {
+        # OSC 111: Restore Background Color to terminal profile default
+        # OSC 110: Restore Foreground Color to terminal profile default
+        # OSC 112: Restore Cursor Color to default
+        [Console]::Write("$ESC]111$ESC\$ESC]110$ESC\$ESC]112$ESC\$ESC[0m")
+    } catch {}
+}
+
+# Activate Modern Slate Grey Theme immediately across terminal canvas
+Set-KronosTerminalTheme
+
+# Text hierarchy (High contrast on modern slate grey canvas)
 $CLR_WHITE       = "$ESC[97m"              # Crisp pure white for titles & values
-$CLR_TEXT        = "$ESC[38;5;252m"         # Clean, readable light silver text
-$CLR_MUTED       = "$ESC[38;5;245m"         # Readable muted slate grey for secondary text
-$CLR_DARK        = "$ESC[38;5;240m"         # Dark graphite / subtle grey
+$CLR_TEXT        = "$ESC[38;5;253m"         # Clean, readable crisp silver text
+$CLR_MUTED       = "$ESC[38;5;247m"         # Readable muted slate grey for secondary text
+$CLR_DARK        = "$ESC[38;5;241m"         # Dark graphite / subtle grey
 
 # Cards & Borders (Clean Modern Slate Grey & Crisp Silver White Theme)
-$CLR_USER_BORDER = "$ESC[38;5;250m"         # Crisp Silver Grey / Light White for User Prompts
-$CLR_BOT_BORDER  = "$ESC[38;5;248m"          # Sleek Clean Slate Grey for KRONOS Response Boxes
-$CLR_SYS_BORDER  = "$ESC[38;5;246m"         # High-Contrast Visible Slate Grey for TUI Cards & Dashboards
+$CLR_USER_BORDER = "$ESC[38;5;252m"         # Crisp Silver Grey / Light White for User Prompts
+$CLR_BOT_BORDER  = "$ESC[38;5;250m"         # Sleek Clean Slate Grey for KRONOS Response Boxes
+$CLR_SYS_BORDER  = "$ESC[38;5;248m"         # High-Contrast Visible Slate Grey for TUI Cards & Dashboards
 $CLR_PANEL_TOP   = "$ESC[97m"               # Crisp Pure White Accent Top
 
-# Semantic Accents
+# Semantic Accents (Ultra-vibrant on Slate Grey Canvas)
 $CLR_CYAN        = "$ESC[38;5;45m"          # Primary accent Cyan
 $CLR_GREEN       = "$ESC[38;5;120m"         # Mint Green (Success)
 $CLR_YELLOW      = "$ESC[38;5;221m"         # Amber (Warning)
@@ -39,7 +68,7 @@ $CLR_AMBER       = "$ESC[38;5;221m"         # Amber alias
 $CLR_RED         = "$ESC[38;5;203m"         # Coral Red (Error)
 $CLR_BLUE        = "$ESC[38;5;75m"          # Sky Blue
 $CLR_PURPLE      = "$ESC[38;5;141m"         # Lavender
-$CLR_GRAY        = "$ESC[38;5;245m"         # Slate grey
+$CLR_GRAY        = "$ESC[38;5;247m"         # Slate grey
 
 # Unicode / ASCII Fallback detection
 $script:UseUnicode = $true
@@ -2126,6 +2155,7 @@ function Start-ConversationMode($initialPrompt = $null) {
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/find <name>  ${CLR_RESET}  ${CLR_WHITE}- Deep search across all drives (C:, D:, etc.) $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/del  <name>  ${CLR_RESET}  ${CLR_WHITE}- Safe delete with confirmation check (y/N)   $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/again        ${CLR_RESET}  ${CLR_WHITE}- Re-launch previously opened target           $CLR_RESET"
+            Write-Host " $CLR_CYAN│  ${CLR_GREEN}/theme [opt]  ${CLR_RESET}  ${CLR_WHITE}- Switch theme (slate, charcoal, black)       $CLR_RESET"
             Write-Host " $CLR_CYAN│$CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}!cmd / >cmd   ${CLR_RESET}  ${CLR_WHITE}- Direct native CMD & PowerShell passthrough $CLR_RESET"
             Write-Host " $CLR_CYAN│$CLR_RESET"
@@ -2373,6 +2403,66 @@ function Start-ConversationMode($initialPrompt = $null) {
             Write-Host ""
             continue
         }
+        if ($pLower -like "/theme*" -or $pLower -like "/bg*") {
+            $parts = $pLower -split '\s+'
+            $sub = if ($parts.Count -gt 1) { $parts[1] } else { "" }
+            switch ($sub) {
+                "black" {
+                    $script:KronosThemeBg = "#0c0c0c"
+                    $script:KronosThemeFg = "#ffffff"
+                    Set-KronosTerminalTheme $script:KronosThemeBg $script:KronosThemeFg
+                    Clear-Host
+                    Write-Host ""
+                    Write-BotBoxTop "THEME"
+                    Write-Host " $CLR_BOT_BORDER│ $CLR_GREEN  [✓] Terminal theme set to: ${CLR_WHITE}Classic Black (#0c0c0c)$CLR_RESET"
+                    Write-BotBoxBottom
+                    Write-Host ""
+                }
+                "charcoal" {
+                    $script:KronosThemeBg = "#1a1d24"
+                    $script:KronosThemeFg = "#f0f3f6"
+                    Set-KronosTerminalTheme $script:KronosThemeBg $script:KronosThemeFg
+                    Clear-Host
+                    Write-Host ""
+                    Write-BotBoxTop "THEME"
+                    Write-Host " $CLR_BOT_BORDER│ $CLR_GREEN  [✓] Terminal theme set to: ${CLR_WHITE}Deep Charcoal (#1a1d24)$CLR_RESET"
+                    Write-BotBoxBottom
+                    Write-Host ""
+                }
+                "slate" {
+                    $script:KronosThemeBg = "#23272e"
+                    $script:KronosThemeFg = "#f0f3f6"
+                    Set-KronosTerminalTheme $script:KronosThemeBg $script:KronosThemeFg
+                    Clear-Host
+                    Write-Host ""
+                    Write-BotBoxTop "THEME"
+                    Write-Host " $CLR_BOT_BORDER│ $CLR_GREEN  [✓] Terminal theme set to: ${CLR_WHITE}Modern Slate Grey (#23272e)$CLR_RESET"
+                    Write-BotBoxBottom
+                    Write-Host ""
+                }
+                default {
+                    if ($script:KronosThemeBg -eq "#23272e") {
+                        $script:KronosThemeBg = "#1a1d24"
+                        $themeName = "Deep Charcoal (#1a1d24)"
+                    } elseif ($script:KronosThemeBg -eq "#1a1d24") {
+                        $script:KronosThemeBg = "#0c0c0c"
+                        $themeName = "Classic Black (#0c0c0c)"
+                    } else {
+                        $script:KronosThemeBg = "#23272e"
+                        $themeName = "Modern Slate Grey (#23272e)"
+                    }
+                    Set-KronosTerminalTheme $script:KronosThemeBg $script:KronosThemeFg
+                    Clear-Host
+                    Write-Host ""
+                    Write-BotBoxTop "THEME"
+                    Write-Host " $CLR_BOT_BORDER│ $CLR_GREEN  [✓] Terminal theme set to: ${CLR_WHITE}$themeName$CLR_RESET"
+                    Write-BotBoxBottom
+                    Write-Host ""
+                }
+            }
+            continue
+        }
+
         if ($pLower -in @("reset", "new")) {
             $script:ConversationHistory = @()
             $script:LastCommandOutput = ""
@@ -2940,6 +3030,7 @@ Show-Banner
 Ensure-Elevation
 
 # --- Main Interactive Loop ---
+try {
 while ($true) {
     $selection = Select-InteractiveMenu
 
@@ -3066,4 +3157,8 @@ while ($true) {
             continue
         }
     }
+}
+}
+finally {
+    Restore-KronosTerminalTheme
 }
