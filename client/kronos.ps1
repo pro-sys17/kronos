@@ -8,29 +8,28 @@ param(
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
-# Console dark palette initialization (Near-black / Dark Graphite Theme)
+# Console palette initialization (Crisp Modern Silver Grey & White Minimalist Theme)
 try {
-    [Console]::BackgroundColor = [ConsoleColor]::Black
     [Console]::ForegroundColor = [ConsoleColor]::Gray
 } catch {}
 
-# Color and formatting definitions (ANSI - Claude Code / Warp Minimalist Dark Palette)
+# Color and formatting definitions (ANSI - Crisp Minimalist Silver Grey & White Borders)
 $ESC = [char]27
 $CLR_RESET       = "$ESC[0m"
 $CLR_BOLD        = "$ESC[1m"
 $CLR_DIM         = "$ESC[2m"
 
-# Text hierarchy (High contrast, readable dark theme)
+# Text hierarchy (High contrast, readable theme)
 $CLR_WHITE       = "$ESC[97m"              # Crisp pure white for titles & values
 $CLR_TEXT        = "$ESC[38;5;252m"         # Clean, readable light silver text
 $CLR_MUTED       = "$ESC[38;5;245m"         # Readable muted slate grey for secondary text
 $CLR_DARK        = "$ESC[38;5;240m"         # Dark graphite / subtle grey
 
-# Cards & Borders (Graphite & Dark Charcoal)
-$CLR_USER_BORDER = "$ESC[38;5;141m"         # Soft Lavender / Purple
-$CLR_BOT_BORDER  = "$ESC[38;5;45m"          # Electric Teal / Cyan
-$CLR_SYS_BORDER  = "$ESC[38;5;239m"         # Slate graphite border
-$CLR_PANEL_TOP   = "$ESC[38;5;45m"          # Accent cyan
+# Cards & Borders (Clean Modern Slate Grey & Crisp Silver White Theme)
+$CLR_USER_BORDER = "$ESC[38;5;250m"         # Crisp Silver Grey / Light White for User Prompts
+$CLR_BOT_BORDER  = "$ESC[38;5;248m"          # Sleek Clean Slate Grey for KRONOS Response Boxes
+$CLR_SYS_BORDER  = "$ESC[38;5;246m"         # High-Contrast Visible Slate Grey for TUI Cards & Dashboards
+$CLR_PANEL_TOP   = "$ESC[97m"               # Crisp Pure White Accent Top
 
 # Semantic Accents
 $CLR_CYAN        = "$ESC[38;5;45m"          # Primary accent Cyan
