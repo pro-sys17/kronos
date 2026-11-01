@@ -688,6 +688,123 @@ function Show-LoginGateway {
 
 
 
+
+# ==============================================================================
+# DYNAMIC ASCII BANNER ENGINE (Cyberpunk / Retro / Multi-Theme)
+# ==============================================================================
+$script:KronosBannerPool = @(
+    @{
+        Name = "Cyberpunk Slant (Neon Cyan)"
+        Color = "CYAN"
+        Colors = @("$ESC[38;5;81m", "$ESC[38;5;75m", "$ESC[38;5;45m", "$ESC[38;5;39m", "$ESC[38;5;33m")
+        Tagline = "⚡ AUTONOMOUS WINDOWS ARCHITECT // ZERO-TRUST ACTIVE"
+        Lines = @(
+            "   __ __ ____   ____  _   __ ____   _____",
+            "  / //_// __ \ / __ \/ | / // __ \ / ___/",
+            " / ,<  / /_/ // / / /  |/ // / / / \__ \ ",
+            "/ /| |/ _, _// /_/ / /|  // /_/ / ___/ / ",
+            "/_/ |_/_/ |_| \____/_/ |_/ \____/ /____/  "
+        )
+    },
+    @{
+        Name = "Emerald Matrix Block"
+        Color = "GREEN"
+        Colors = @("$ESC[38;5;120m", "$ESC[38;5;84m", "$ESC[38;5;48m", "$ESC[38;5;42m", "$ESC[38;5;36m")
+        Tagline = "◈ NEURAL RESTORATION CORE // HARDWARE HYPERVISOR"
+        Lines = @(
+            " _  ______   ___  _   _  ___  ____  ",
+            "| |/ /  _ \ / _ \| \ | |/ _ \/ ___| ",
+            "| ' /| |_) | | | |  \| | | | \___ \ ",
+            "| . \|  _ <| |_| | |\  | |_| |___) |",
+            "|_|\_\_| \_\___/|_| \_|\___/|____/ "
+        )
+    },
+    @{
+        Name = "Deep Neon Shadow"
+        Color = "PURPLE"
+        Colors = @("$ESC[38;5;213m", "$ESC[38;5;177m", "$ESC[38;5;141m", "$ESC[38;5;105m", "$ESC[38;5;69m")
+        Tagline = "⚡ QUANTUM RUNTIME // NATURAL HINGLISH OS COPILOT"
+        Lines = @(
+            " _  _______   ____  _   _  ____   _____",
+            "| |/ /  __ \ / __ \| \ | |/ __ \ / ____|",
+            "| ' /| |__) | |  | |  \| | |  | | (___  ",
+            "| . \|  _  /| |  | | . ` | |  | |\___ \ ",
+            "| |\ \ | \ \| |__| | |\  | |__| |____) |",
+            "|_| \_\_|  \_\____/|_| \_|\____/|_____/ "
+        )
+    },
+    @{
+        Name = "Solar Amber Industrial"
+        Color = "AMBER"
+        Colors = @("$ESC[38;5;226m", "$ESC[38;5;220m", "$ESC[38;5;214m", "$ESC[38;5;208m", "$ESC[38;5;202m")
+        Tagline = "◈ PROFESSOR PRIVATE TERMINAL // ROOT LEVEL CLEARANCE"
+        Lines = @(
+            "  ___   ___  ______    _______  __    _  _______  _______ ",
+            " |   | /   ||    _ |  |       ||  |  | ||       ||       |",
+            " |   |/   / |   | ||  |   _   ||   |_| ||   _   ||  _____|",
+            " |    _  /  |   |_||_ |  | |  ||       ||  | |  || |_____ ",
+            " |   | \ \  |    __  ||  |_|  ||  _    ||  |_|  ||_____  |",
+            " |   |  \ \ |   |  | ||       || | |   ||       | _____| |",
+            " |___|   \_||___|  |_||_______||_|  |__||_______||_______|"
+        )
+    },
+    @{
+        Name = "Ghost White Futuristic"
+        Color = "WHITE"
+        Colors = @("$ESC[97m", "$ESC[38;5;254m", "$ESC[38;5;251m", "$ESC[38;5;248m", "$ESC[38;5;245m")
+        Tagline = "⚡ ZERO-INSTALL POWERSHELL RUNTIME // CLOUD FAILOVER ACTIVE"
+        Lines = @(
+            " _  __ _____   ____  _   _  ____   _____ ",
+            "| |/ /|  __ \ / __ \| \ | |/ __ \ / ____|",
+            "| ' / | |__) | |  | |  \| | |  | | (___  ",
+            "| . \ |  _  /| |  | | . ` | |  | |\___ \ ",
+            "| |\ \| | \ \| |__| | |\  | |__| |____) |",
+            "|_| \_\_|  \_\____/|_| \_|\____/|_____/ "
+        )
+    }
+)
+
+$script:KronosBannerIndex = Get-Random -Minimum 0 -Maximum $script:KronosBannerPool.Count
+
+function Show-KronosDynamicBanner([bool]$Compact = $false) {
+    if ($script:KronosBannerPool.Count -eq 0) { return }
+
+    $banner = $script:KronosBannerPool[$script:KronosBannerIndex % $script:KronosBannerPool.Count]
+    $lines = $banner.Lines
+    $colors = $banner.Colors
+    $tagline = $banner.Tagline
+
+    Write-Host ""
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $c = if ($i -lt $colors.Count) { $colors[$i] } else { "$ESC[97m" }
+        Write-Host "  ${c}$($lines[$i])${CLR_RESET}"
+    }
+
+    $activeEngineInfo = "Engine: ${CLR_CYAN}[$script:ActiveModel]${CLR_RESET}"
+    $hostInfo = "Host: ${CLR_WHITE}$env:COMPUTERNAME${CLR_RESET}"
+    $userInfo = "User: ${CLR_BOLD}${CLR_GREEN}$env:USERNAME${CLR_RESET}"
+
+    Write-Host "  ${CLR_MUTED}$tagline${CLR_RESET}"
+    Write-Host "  ${CLR_DARK}────────── $activeEngineInfo ${CLR_DARK}• $hostInfo ${CLR_DARK}• $userInfo ${CLR_DARK}──────────${CLR_RESET}"
+    Write-Host ""
+}
+
+function Switch-KronosBanner([string]$target = $null) {
+    if ($target -match '^\d+$') {
+        $idx = [int]$target - 1
+        if ($idx -ge 0 -and $idx -lt $script:KronosBannerPool.Count) {
+            $script:KronosBannerIndex = $idx
+        }
+    } else {
+        $script:KronosBannerIndex = ($script:KronosBannerIndex + 1) % $script:KronosBannerPool.Count
+    }
+
+    $b = $script:KronosBannerPool[$script:KronosBannerIndex % $script:KronosBannerPool.Count]
+    Write-Host ""
+    Write-Host " ${CLR_GREEN}[✓] Dynamic Banner switched to: ${CLR_BOLD}${CLR_WHITE}$($b.Name)${CLR_RESET}"
+    Show-KronosDynamicBanner
+}
+
 function Show-Banner([bool]$useVtHome = $false) {
 
     if (-not $useVtHome) {
@@ -4440,13 +4557,13 @@ function Start-ConversationMode($initialPrompt = $null) {
 
     Clear-Host
 
-    Write-Host ""
+    Show-KronosDynamicBanner
 
     Write-Host " $CLR_BOT_BORDER╭─ KRONOS AI CO-PILOT ──────────────────────────────────────────$CLR_RESET"
 
     Write-Host " $CLR_BOT_BORDER│  $CLR_WHITE Autonomous Windows Co-Pilot • Natural Hinglish / English$CLR_RESET"
 
-    Write-Host " $CLR_BOT_BORDER│  $CLR_MUTED Commands: ${CLR_GREEN}/help${CLR_MUTED} • ${CLR_GREEN}/model${CLR_MUTED} • ${CLR_GREEN}/open <#>${CLR_MUTED} • ${CLR_GREEN}/wifi${CLR_MUTED} • ${CLR_GREEN}/disk${CLR_MUTED} • ${CLR_GREEN}/specs${CLR_MUTED} • ${CLR_GREEN}/top${CLR_MUTED} • ${CLR_GREEN}/tree$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│  $CLR_MUTED Commands: ${CLR_GREEN}/help${CLR_MUTED} • ${CLR_GREEN}/model${CLR_MUTED} • ${CLR_GREEN}/banner${CLR_MUTED} • ${CLR_GREEN}/open <#>${CLR_MUTED} • ${CLR_GREEN}/wifi${CLR_MUTED} • ${CLR_GREEN}/disk${CLR_MUTED} • ${CLR_GREEN}/specs${CLR_MUTED} • ${CLR_GREEN}/top${CLR_MUTED} • ${CLR_GREEN}/tree$CLR_RESET"
     Write-Host " $CLR_BOT_BORDER│  $CLR_MUTED Active Model: ${CLR_CYAN}[$script:ActiveModel]${CLR_MUTED} (Type ${CLR_GREEN}/model${CLR_MUTED} to switch AI engine)$CLR_RESET"
 
     Write-BotBoxBottom
@@ -4504,6 +4621,7 @@ function Start-ConversationMode($initialPrompt = $null) {
             Write-Host " $CLR_CYAN│$CLR_RESET"
 
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/model [name] ${CLR_RESET}  ${CLR_WHITE}- Switch active AI engine (Groq, Gemini, Local, Custom) $CLR_RESET"
+            Write-Host " $CLR_CYAN│  ${CLR_GREEN}/banner [1-5] ${CLR_RESET}  ${CLR_WHITE}- Shuffle or switch dynamic ASCII cyberpunk banners     $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/open <name|#>${CLR_RESET}  ${CLR_WHITE}- Open app, file, or item number from output $CLR_RESET"
 
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/list [drive] ${CLR_RESET}  ${CLR_WHITE}- List files & folders with category badges  $CLR_RESET"
