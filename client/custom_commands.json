@@ -1,0 +1,17 @@
+[
+  {
+    "trigger": "chrome",
+    "command": "chrome.exe",
+    "description": "Google Chrome Web Browser"
+  },
+  {
+    "trigger": "calc",
+    "command": "calc.exe",
+    "description": "Windows Calculator"
+  },
+  {
+    "trigger": "notepad",
+    "command": "notepad.exe",
+    "description": "Windows Notepad Editor"
+  }
+]

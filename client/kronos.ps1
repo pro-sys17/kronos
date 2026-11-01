@@ -4575,6 +4575,395 @@ function Show-ModelSwitcherTUI {
     Write-Host ""
 }
 
+
+# ==============================================================================
+# KRONOS CUSTOM COMMANDS & 250+ WINDOWS TOOLS INJECTION ENGINE
+# ==============================================================================
+
+function Get-KronosCustomCommands {
+    $results = @()
+    $candidateFiles = @(
+        "$PSScriptRoot\custom_commands.txt",
+        "$PSScriptRoot\custom_commands.json",
+        ".\custom_commands.txt",
+        ".\custom_commands.json",
+        "..\custom_commands.txt",
+        "..\custom_commands.json"
+    )
+
+    $seen = @{}
+    foreach ($f in $candidateFiles) {
+        if (-not (Test-Path $f)) { continue }
+        try {
+            if ($f -match '\.json$') {
+                $raw = Get-Content $f -Raw -ErrorAction SilentlyContinue | ConvertFrom-Json
+                foreach ($item in $raw) {
+                    if ($item.trigger -and $item.command -and -not $seen.ContainsKey($item.trigger.ToLower())) {
+                        $seen[$item.trigger.ToLower()] = $true
+                        $results += [PSCustomObject]@{
+                            Trigger = $item.trigger.Trim()
+                            Command = $item.command.Trim()
+                            Description = if ($item.description) { $item.description.Trim() } else { "Custom Command" }
+                            Type = "CUSTOM"
+                        }
+                    }
+                }
+            } else {
+                $lines = Get-Content $f -ErrorAction SilentlyContinue
+                foreach ($l in $lines) {
+                    $l = $l.Trim()
+                    if (-not $l -or $l.StartsWith("#")) { continue }
+                    if ($l -match '^([^=]+)=(.*)$') {
+                        $trig = $Matches[1].Trim()
+                        $rest = $Matches[2].Trim()
+                        $cmd = $rest
+                        $desc = "Custom Command"
+                        if ($rest -match '^(.*?)\|(.*)$') {
+                            $cmd = $Matches[1].Trim()
+                            $desc = $Matches[2].Trim()
+                        }
+                        if ($trig -and -not $seen.ContainsKey($trig.ToLower())) {
+                            $seen[$trig.ToLower()] = $true
+                            $results += [PSCustomObject]@{
+                                Trigger = $trig
+                                Command = $cmd
+                                Description = $desc
+                                Type = "CUSTOM"
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {}
+    }
+    return $results
+}
+
+function Add-KronosCustomCommand([string]$rawSpec) {
+    if (-not $rawSpec -or -not ($rawSpec -match '^([^=]+)=(.*)$')) {
+        Write-Host " ${CLR_YELLOW}[!] Syntax: /addcmd <trigger> = <command> | <description>${CLR_RESET}"
+        Write-Host " ${CLR_MUTED}    Example: /addcmd chrome = chrome.exe | Google Chrome Web Browser${CLR_RESET}"
+        return
+    }
+
+    $trig = $Matches[1].Trim()
+    $targetFile = "$PSScriptRoot\custom_commands.txt"
+    if (-not (Test-Path $targetFile)) {
+        $targetFile = ".\custom_commands.txt"
+    }
+
+    try {
+        Add-Content -Path $targetFile -Value "$rawSpec" -Encoding UTF8
+        Write-Host ""
+        Write-Host " ${CLR_GREEN}[✓] Custom command '${CLR_WHITE}$trig${CLR_GREEN}' successfully added to:${CLR_RESET}"
+        Write-Host "     ${CLR_CYAN}$targetFile${CLR_RESET}"
+        Write-Host " ${CLR_WHITE}Aap chat me seedhe bol sakte hain: ${CLR_GREEN}'open $trig'${CLR_WHITE} ya ${CLR_GREEN}'/$trig'${CLR_RESET}"
+        Write-Host ""
+    } catch {
+        Write-Host " ${CLR_RED}[!] Error writing custom command: $_${CLR_RESET}"
+    }
+}
+
+function Show-CustomCommandsGuide {
+    Write-Host ""
+    Write-BotBoxTop "KRONOS CUSTOM COMMANDS & TOOLS ENGINE"
+    Write-Host " $CLR_BOT_BORDER│ $CLR_GREEN  [✓] Extensible Custom Commands Feature is Active & Loaded!$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│ $CLR_WHITE  Bhai, aap kisi bhi custom software, tool, ya script ko text file me add kar sakte hain:$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│  ${CLR_CYAN}File Location :${CLR_RESET} ${CLR_WHITE}.\custom_commands.txt${CLR_RESET}  ${CLR_MUTED}(or custom_commands.json)${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│  ${CLR_YELLOW}Syntax (One line per command in custom_commands.txt):${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│    ${CLR_GREEN}<trigger> = <command_or_path> | <description>${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│  ${CLR_YELLOW}Examples:${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│    ${CLR_WHITE}chrome   = chrome.exe | Google Chrome Web Browser${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│    ${CLR_WHITE}vlc      = C:\Program Files\VideoLAN\VLC\vlc.exe | VLC Player${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│    ${CLR_WHITE}code     = code . | Open VS Code in Current Directory${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│    ${CLR_WHITE}mytool   = C:\scripts\my_backup.bat | Run Backup Script${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│$CLR_RESET"
+
+    $customs = Get-KronosCustomCommands
+    if ($customs.Count -gt 0) {
+        Write-Host " $CLR_BOT_BORDER│  ${CLR_CYAN}Currently Loaded Custom Commands (${CLR_GREEN}$($customs.Count)${CLR_CYAN}):${CLR_RESET}"
+        foreach ($c in $customs) {
+            Write-Host " $CLR_BOT_BORDER│    ${CLR_GREEN}$($c.Trigger.PadRight(12))${CLR_RESET} -> ${CLR_WHITE}$($c.Description)${CLR_RESET} ${CLR_MUTED}($($c.Command))${CLR_RESET}"
+        }
+        Write-Host " $CLR_BOT_BORDER│$CLR_RESET"
+    }
+
+    Write-Host " $CLR_BOT_BORDER│  ${CLR_MUTED}Tip 1: File save karte hi chat me seedhe bolein: 'open <trigger>'!${CLR_RESET}"
+    Write-Host " $CLR_BOT_BORDER│  ${CLR_MUTED}Tip 2: Direct add karne ke liye type karein: /addcmd <trigger> = <path> | <desc>${CLR_RESET}"
+    Write-BotBoxBottom
+    Write-Host ""
+}
+
+function Show-WindowsCommandsTUI {
+    param([string]$searchQuery = $null)
+
+    $categories = @(
+        @{
+            Name = "System Information & Hardware Diagnostics"
+            Tag = "SYS-DIAG"
+            Desc = "System specs, DirectX, Performance, Resource & Reliability monitors"
+            Commands = @(
+                @{ Cmd = "msinfo32"; Type = "GUI"; Desc = "System Information (Full Hardware & Driver Specs)" },
+                @{ Cmd = "dxdiag"; Type = "GUI"; Desc = "DirectX Diagnostic Tool (GPU, Sound & Display)" },
+                @{ Cmd = "winver"; Type = "GUI"; Desc = "Windows Version & OS Build Dialog" },
+                @{ Cmd = "msconfig"; Type = "GUI"; Desc = "System Configuration Utility (Boot & Services)" },
+                @{ Cmd = "systeminfo"; Type = "CLI"; Desc = "Detailed Machine Specs, BIOS & Hotfixes CLI" },
+                @{ Cmd = "perfmon"; Type = "GUI"; Desc = "Performance Monitor (Hardware Counters Graph)" },
+                @{ Cmd = "resmon"; Type = "GUI"; Desc = "Resource Monitor (CPU, RAM, Disk & Network)" },
+                @{ Cmd = "taskmgr"; Type = "GUI"; Desc = "Windows Task Manager" },
+                @{ Cmd = "eventvwr.msc"; Type = "MMC"; Desc = "Windows Event Viewer (Event Logs)" },
+                @{ Cmd = "perfmon /rel"; Type = "GUI"; Desc = "Reliability Monitor (System Stability History)" },
+                @{ Cmd = "psr.exe"; Type = "GUI"; Desc = "Problem Steps Recorder (Screen Logger)" },
+                @{ Cmd = "sysdm.cpl"; Type = "CPL"; Desc = "System Properties (Computer Name & Hardware)" },
+                @{ Cmd = "systempropertiesadvanced"; Type = "GUI"; Desc = "Advanced System Properties (Environment Variables)" }
+            )
+        },
+        @{
+            Name = "Control Panel Applets (.cpl)"
+            Tag = "CPL-APPLETS"
+            Desc = "Classic Control Panel configurations & device properties"
+            Commands = @(
+                @{ Cmd = "ncpa.cpl"; Type = "CPL"; Desc = "Network Connections (Ethernet, Wi-Fi & IPv4 DNS)" },
+                @{ Cmd = "appwiz.cpl"; Type = "CPL"; Desc = "Programs and Features (Uninstall / Repair Software)" },
+                @{ Cmd = "firewall.cpl"; Type = "CPL"; Desc = "Windows Defender Firewall Status & Rules" },
+                @{ Cmd = "mmsys.cpl"; Type = "CPL"; Desc = "Sound Properties (Speakers, Mics & Levels)" },
+                @{ Cmd = "desk.cpl"; Type = "CPL"; Desc = "Display Settings & Monitor Resolution" },
+                @{ Cmd = "powercfg.cpl"; Type = "CPL"; Desc = "Power Options (Performance & Sleep Plans)" },
+                @{ Cmd = "inetcpl.cpl"; Type = "CPL"; Desc = "Internet Properties (Security Zones & Proxy)" },
+                @{ Cmd = "timedate.cpl"; Type = "CPL"; Desc = "Date and Time Properties & NTP Sync" },
+                @{ Cmd = "intl.cpl"; Type = "CPL"; Desc = "Region & Language Formats" },
+                @{ Cmd = "main.cpl"; Type = "CPL"; Desc = "Mouse Properties & Pointer Speed" },
+                @{ Cmd = "joy.cpl"; Type = "CPL"; Desc = "Game Controllers (USB Gamepad Calibration)" },
+                @{ Cmd = "wscui.cpl"; Type = "CPL"; Desc = "Security and Maintenance Center" },
+                @{ Cmd = "hdwwiz.cpl"; Type = "CPL"; Desc = "Add Hardware Wizard (Legacy Drivers)" }
+            )
+        },
+        @{
+            Name = "Microsoft Management Consoles (.msc)"
+            Tag = "MMC-CONSOLES"
+            Desc = "Administrative management consoles & snap-ins"
+            Commands = @(
+                @{ Cmd = "devmgmt.msc"; Type = "MMC"; Desc = "Device Manager (Hardware Drivers & Degraded Devices)" },
+                @{ Cmd = "diskmgmt.msc"; Type = "MMC"; Desc = "Disk Management (Partitions, Volumes & Formatting)" },
+                @{ Cmd = "services.msc"; Type = "MMC"; Desc = "Windows Services Controller" },
+                @{ Cmd = "compmgmt.msc"; Type = "MMC"; Desc = "Computer Management Master Console" },
+                @{ Cmd = "taskschd.msc"; Type = "MMC"; Desc = "Task Scheduler (Scheduled Background Tasks)" },
+                @{ Cmd = "gpedit.msc"; Type = "MMC"; Desc = "Local Group Policy Editor" },
+                @{ Cmd = "secpol.msc"; Type = "MMC"; Desc = "Local Security Policy (Audit & User Rights)" },
+                @{ Cmd = "lusrmgr.msc"; Type = "MMC"; Desc = "Local Users and Groups Manager" },
+                @{ Cmd = "certmgr.msc"; Type = "MMC"; Desc = "Certificate Manager (Current User)" },
+                @{ Cmd = "certlm.msc"; Type = "MMC"; Desc = "Certificate Manager (Local Computer)" },
+                @{ Cmd = "fsmgmt.msc"; Type = "MMC"; Desc = "Shared Folders & Open Sessions" },
+                @{ Cmd = "wf.msc"; Type = "MMC"; Desc = "Firewall with Advanced Security (Inbound/Outbound)" },
+                @{ Cmd = "printmanagement.msc"; Type = "MMC"; Desc = "Print Management & Spooler Console" }
+            )
+        },
+        @{
+            Name = "Modern Windows 10/11 Settings (ms-settings:)"
+            Tag = "SETTINGS-URI"
+            Desc = "Direct jump into modern Windows Settings pages"
+            Commands = @(
+                @{ Cmd = "ms-settings:"; Type = "URI"; Desc = "Windows Settings Homepage" },
+                @{ Cmd = "ms-settings:windowsupdate"; Type = "URI"; Desc = "Windows Update (Check for Updates)" },
+                @{ Cmd = "ms-settings:network"; Type = "URI"; Desc = "Network & Internet Overview" },
+                @{ Cmd = "ms-settings:network-wifi"; Type = "URI"; Desc = "Wi-Fi Networks & Saved Networks" },
+                @{ Cmd = "ms-settings:bluetooth"; Type = "URI"; Desc = "Bluetooth & Other Wireless Devices" },
+                @{ Cmd = "ms-settings:appsfeatures"; Type = "URI"; Desc = "Apps & Features (Installed Store & Win32 Apps)" },
+                @{ Cmd = "ms-settings:defaultapps"; Type = "URI"; Desc = "Default Applications Associations" },
+                @{ Cmd = "ms-settings:storagesense"; Type = "URI"; Desc = "Storage Sense & Automated Temp Cleanup" },
+                @{ Cmd = "ms-settings:display"; Type = "URI"; Desc = "Display Brightness, Night Light & HDR" },
+                @{ Cmd = "ms-settings:sound"; Type = "URI"; Desc = "Sound Devices & Volume Mixer" },
+                @{ Cmd = "ms-settings:batterysaver"; Type = "URI"; Desc = "Battery Saver & App Energy Usage" },
+                @{ Cmd = "ms-settings:windowsdefender"; Type = "URI"; Desc = "Windows Security & Defender Center" },
+                @{ Cmd = "ms-settings:recovery"; Type = "URI"; Desc = "Recovery & Reset This PC" },
+                @{ Cmd = "ms-settings:about"; Type = "URI"; Desc = "About PC & System Specifications" }
+            )
+        },
+        @{
+            Name = "Network & Connectivity CLI"
+            Tag = "NET-CLI"
+            Desc = "IP, DNS, Routing, Wi-Fi & Port audit commands"
+            Commands = @(
+                @{ Cmd = "ipconfig /all"; Type = "CLI"; Desc = "Full IP Configuration & DNS Servers" },
+                @{ Cmd = "ipconfig /flushdns"; Type = "CLI"; Desc = "Flush DNS Resolver Cache" },
+                @{ Cmd = "ipconfig /renew"; Type = "CLI"; Desc = "Renew DHCP IP Address Lease" },
+                @{ Cmd = "netstat -ano"; Type = "CLI"; Desc = "List All Active TCP/UDP Ports & PIDs" },
+                @{ Cmd = "ping 8.8.8.8"; Type = "CLI"; Desc = "Ping Internet ICMP Latency Test" },
+                @{ Cmd = "tracert 8.8.8.8"; Type = "CLI"; Desc = "Trace Route Network Hops" },
+                @{ Cmd = "pathping 8.8.8.8"; Type = "CLI"; Desc = "Trace Route with Packet Loss Stats" },
+                @{ Cmd = "nslookup"; Type = "CLI"; Desc = "Interactive DNS Lookup Tool" },
+                @{ Cmd = "route print"; Type = "CLI"; Desc = "Print IP Routing Table" },
+                @{ Cmd = "arp -a"; Type = "CLI"; Desc = "Display ARP Table (IP to MAC mapping)" },
+                @{ Cmd = "getmac /v"; Type = "CLI"; Desc = "Display Physical Network MAC Addresses" },
+                @{ Cmd = "netsh wlan show profiles"; Type = "CLI"; Desc = "List All Saved Wi-Fi Profiles" },
+                @{ Cmd = "netsh wlan show interfaces"; Type = "CLI"; Desc = "Display Current Wi-Fi Signal & Link Speed" },
+                @{ Cmd = "netsh int ip reset"; Type = "CLI"; Desc = "Reset TCP/IP Protocol Stack" },
+                @{ Cmd = "netsh winsock reset"; Type = "CLI"; Desc = "Reset Winsock Catalog & Sockets" }
+            )
+        },
+        @{
+            Name = "Storage, Disks & System Repair CLI"
+            Tag = "STORAGE-CLI"
+            Desc = "File system repair, DISM, SFC, Defrag & Disk cleanup"
+            Commands = @(
+                @{ Cmd = "sfc /scannow"; Type = "CLI"; Desc = "System File Checker (Scan & Repair Corrupted Files)" },
+                @{ Cmd = "dism /online /cleanup-image /restorehealth"; Type = "CLI"; Desc = "DISM Component Store Repair" },
+                @{ Cmd = "chkdsk C: /f"; Type = "CLI"; Desc = "Check Disk File System Fix" },
+                @{ Cmd = "cleanmgr.exe"; Type = "GUI"; Desc = "Disk Cleanup Wizard" },
+                @{ Cmd = "defrag C: /O"; Type = "CLI"; Desc = "Optimize / Trim SSD or Defrag HDD" },
+                @{ Cmd = "diskpart"; Type = "CLI"; Desc = "Disk Partitioning Command Tool" },
+                @{ Cmd = "robocopy"; Type = "CLI"; Desc = "Robust Multi-Threaded File Copy" },
+                @{ Cmd = "tree /f /a"; Type = "CLI"; Desc = "Directory Tree Hierarchy Graph" },
+                @{ Cmd = "compact /c /s:C:\Temp"; Type = "CLI"; Desc = "NTFS File Compression" },
+                @{ Cmd = "cipher /w:C:"; Type = "CLI"; Desc = "Wipe Free Unallocated Disk Space" }
+            )
+        },
+        @{
+            Name = "Security, Policies & User Accounts"
+            Tag = "SEC-ADMIN"
+            Desc = "User privileges, Group Policy, Accounts & Security"
+            Commands = @(
+                @{ Cmd = "whoami /all"; Type = "CLI"; Desc = "Current User Privileges & SIDs" },
+                @{ Cmd = "gpupdate /force"; Type = "CLI"; Desc = "Force Immediate Group Policy Refresh" },
+                @{ Cmd = "gpresult /r"; Type = "CLI"; Desc = "Display Applied Group Policy Summary" },
+                @{ Cmd = "net user"; Type = "CLI"; Desc = "List All Local User Accounts" },
+                @{ Cmd = "net localgroup administrators"; Type = "CLI"; Desc = "List Local Administrators" },
+                @{ Cmd = "netplwiz"; Type = "GUI"; Desc = "Advanced User Accounts Dialog" },
+                @{ Cmd = "certutil -dump"; Type = "CLI"; Desc = "Dump Security Certificates" },
+                @{ Cmd = "klist"; Type = "CLI"; Desc = "List Kerberos Security Tickets" }
+            )
+        },
+        @{
+            Name = "Popup Utilities & Master God Mode"
+            Tag = "POPUP-TOOLS"
+            Desc = "Quick launch utilities, registry, and Windows Master God Mode"
+            Commands = @(
+                @{ Cmd = "regedit.exe"; Type = "GUI"; Desc = "Windows Registry Editor" },
+                @{ Cmd = "control.exe"; Type = "GUI"; Desc = "Classic Windows Control Panel" },
+                @{ Cmd = "snippingtool.exe"; Type = "GUI"; Desc = "Snipping Tool & Screen Capture" },
+                @{ Cmd = "mstsc.exe"; Type = "GUI"; Desc = "Remote Desktop Connection Client" },
+                @{ Cmd = "magnify.exe"; Type = "GUI"; Desc = "Screen Magnifier" },
+                @{ Cmd = "osk.exe"; Type = "GUI"; Desc = "On-Screen Virtual Keyboard" },
+                @{ Cmd = "charmap.exe"; Type = "GUI"; Desc = "Character Map & Unicode Glyphs" },
+                @{ Cmd = "mrt.exe"; Type = "GUI"; Desc = "Microsoft Malicious Software Removal Tool" },
+                @{ Cmd = "optionalfeatures.exe"; Type = "GUI"; Desc = "Turn Windows Features On or Off" },
+                @{ Cmd = "shutdown /i"; Type = "GUI"; Desc = "Remote Graphical Shutdown Dialog" },
+                @{ Cmd = "shell:::{ED7BA470-8E54-465E-825C-99712043E01C}"; Type = "GUI"; Desc = "Windows Master Control Panel (God Mode: 200+ Applets)" }
+            )
+        }
+    )
+
+    $customCmds = Get-KronosCustomCommands
+    if ($customCmds.Count -gt 0) {
+        $cList = @()
+        foreach ($c in $customCmds) {
+            $cList += @{ Cmd = $c.Command; Type = "CUSTOM"; Desc = "$($c.Description) [Trigger: $($c.Trigger)]" }
+        }
+        $categories += @{
+            Name = "User Custom Commands & Tools (custom_commands.txt)"
+            Tag = "USER-CUSTOM"
+            Desc = "Your custom tools and scripts loaded live"
+            Commands = $cList
+        }
+    }
+
+    $totalCmds = 0
+    foreach ($cat in $categories) { $totalCmds += $cat.Commands.Count }
+
+    while ($true) {
+        Write-Host ""
+        Write-Host " ${CLR_CYAN}╭─ [WINDOWS MASTER COMMANDS COCKPIT] ──────────────────────────────────────────${CLR_RESET}"
+        Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_WHITE}${CLR_BOLD}$totalCmds+ Windows Commands & Tools Injected${CLR_RESET} ${CLR_MUTED}(Select category or type tool to launch)${CLR_RESET}"
+        Write-Host " ${CLR_CYAN}├──────────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+
+        for ($i = 0; $i -lt $categories.Count; $i++) {
+            $cat = $categories[$i]
+            $num = $i + 1
+            $cnt = $cat.Commands.Count
+            Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_WHITE}[$num]${CLR_RESET} ${CLR_CYAN}$($cat.Name.PadRight(44))${CLR_RESET} ${CLR_GREEN}($cnt tools)${CLR_RESET}"
+        }
+
+        Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_YELLOW}[c]${CLR_RESET} ${CLR_WHITE}Custom Commands Guide & Text File Info${CLR_RESET}"
+        Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_MUTED}[0] Back to Chat Workspace${CLR_RESET}"
+        Write-Host " ${CLR_CYAN}╰──────────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+        Write-Host ""
+
+        $choice = (Read-Host " Select category [1-$($categories.Count)], 'c' for custom, or type tool name").Trim()
+
+        if ([string]::IsNullOrWhiteSpace($choice) -or $choice -eq "0" -or $choice -in @("b", "back", "q", "exit")) {
+            break
+        }
+
+        if ($choice -in @("c", "custom")) {
+            Show-CustomCommandsGuide
+            continue
+        }
+
+        $cIdx = 0
+        if ([int]::TryParse($choice, [ref]$cIdx) -and $cIdx -ge 1 -and $cIdx -le $categories.Count) {
+            $selectedCat = $categories[$cIdx - 1]
+            Write-Host ""
+            Write-Host " ${CLR_CYAN}╭─ [$($selectedCat.Name.ToUpper())] ───────────────────────────────────${CLR_RESET}"
+            Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_MUTED}$($selectedCat.Desc)${CLR_RESET}"
+            Write-Host " ${CLR_CYAN}├──────────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+
+            for ($j = 0; $j -lt $selectedCat.Commands.Count; $j++) {
+                $item = $selectedCat.Commands[$j]
+                $itemNum = $j + 1
+                $badge = if ($item.Type -eq "GUI") { "${CLR_GREEN}[GUI]${CLR_RESET}" }
+                         elseif ($item.Type -eq "CPL") { "${CLR_CYAN}[CPL]${CLR_RESET}" }
+                         elseif ($item.Type -eq "MMC") { "${CLR_AMBER}[MMC]${CLR_RESET}" }
+                         elseif ($item.Type -eq "URI") { "${CLR_MAGENTA}[URI]${CLR_RESET}" }
+                         elseif ($item.Type -eq "CUSTOM") { "${CLR_BOLD}${CLR_GREEN}[CUSTOM]${CLR_RESET}" }
+                         else { "${CLR_WHITE}[CLI]${CLR_RESET}" }
+
+                Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_WHITE}[$itemNum]${CLR_RESET} $badge ${CLR_BOLD}${CLR_CYAN}$($item.Cmd.PadRight(28))${CLR_RESET} ${CLR_MUTED}$($item.Desc)${CLR_RESET}"
+            }
+
+            Write-Host " ${CLR_CYAN}╰──────────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+            Write-Host ""
+            $toolChoice = (Read-Host " Select tool [1-$($selectedCat.Commands.Count)] to launch or press Enter to return").Trim()
+
+            if (-not [string]::IsNullOrWhiteSpace($toolChoice)) {
+                $tIdx = 0
+                if ([int]::TryParse($toolChoice, [ref]$tIdx) -and $tIdx -ge 1 -and $tIdx -le $selectedCat.Commands.Count) {
+                    $chosenTool = $selectedCat.Commands[$tIdx - 1]
+                    Write-Host ""
+                    Write-Host " ${CLR_GREEN}[*] Launching: $($chosenTool.Cmd) ...${CLR_RESET}"
+                    try {
+                        if ($chosenTool.Type -in @("GUI", "CPL", "MMC", "URI", "CUSTOM")) {
+                            if ($chosenTool.Cmd -match '^shell:::') {
+                                Start-Process explorer.exe -ArgumentList $chosenTool.Cmd
+                            } else {
+                                Start-Process $chosenTool.Cmd
+                            }
+                        } else {
+                            Invoke-Expression $chosenTool.Cmd
+                        }
+                        Write-Host " ${CLR_GREEN}[✓] Tool dispatched successfully.${CLR_RESET}"
+                    } catch {
+                        Write-Host " ${CLR_RED}[!] Error executing: $_${CLR_RESET}"
+                    }
+                    Write-Host ""
+                }
+            }
+        } else {
+            # Try launching by name
+            $directTarget = $choice
+            Write-Host " ${CLR_GREEN}[*] Attempting to launch '$directTarget'...${CLR_RESET}"
+            try {
+                Start-Process $directTarget
+                Write-Host " ${CLR_GREEN}[✓] Dispatched '$directTarget'.${CLR_RESET}"
+            } catch {
+                Write-Host " ${CLR_YELLOW}[!] Unknown command or category '$directTarget'.${CLR_RESET}"
+            }
+        }
+    }
+}
+
 function Start-ConversationMode($initialPrompt = $null) {
 
     Clear-Host
@@ -4653,6 +5042,32 @@ function Start-ConversationMode($initialPrompt = $null) {
             continue
         }
 
+        # Injected Windows Commands Master Catalog TUI (/cmds, /tools, /catalog, tools, commands, etc.)
+        if ($pLower -in @("/cmds", "/tools", "/catalog", "tools", "commands", "/allcmds") -or
+            $pLower -match '^show\s*(all\s*)?(tools|commands|cmds)' -or
+            $pLower -match '^list\s*(all\s*)?(tools|commands|cmds)' -or
+            $pLower -match '^(sare|saare)\s*(tools|commands|cmds)' -or
+            $pLower -match 'duniya\s*bhar\s*ke' -or
+            $pLower -match 'show\s*nahi\s*ho\s*rh') {
+            Show-WindowsCommandsTUI
+            continue
+        }
+
+        # Custom commands guide and configuration (/custom)
+        if ($pLower -in @("/custom", "custom", "custom cmds", "custom commands") -or
+            $pLower -match '(add|create)\s*custom\s*(cmd|tool|command)' -or
+            $pLower -match '(add|more)\s*(gui\s*)?cmd\s*(by|via|with)?\s*(a\s*)?text\s*file') {
+            Show-CustomCommandsGuide
+            continue
+        }
+
+        # Add custom command live (/addcmd trigger = command | description)
+        if ($pLower -match '^\s*/addcmd\s+(.+)$') {
+            $rawCmdSpec = $Matches[1].Trim()
+            Add-KronosCustomCommand $rawCmdSpec
+            continue
+        }
+
 
 
         # 1. Quick Commands Help Sheet
@@ -4667,6 +5082,9 @@ function Start-ConversationMode($initialPrompt = $null) {
 
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/model [name] ${CLR_RESET}  ${CLR_WHITE}- Switch active AI engine (Groq, Gemini, Local, Custom) $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/banner [1-5] ${CLR_RESET}  ${CLR_WHITE}- Shuffle or switch dynamic ASCII cyberpunk banners     $CLR_RESET"
+            Write-Host " $CLR_CYAN│  ${CLR_GREEN}/cmds /tools  ${CLR_RESET}  ${CLR_WHITE}- Explore 250+ injected Windows commands & tools        $CLR_RESET"
+            Write-Host " $CLR_CYAN│  ${CLR_GREEN}/custom       ${CLR_RESET}  ${CLR_WHITE}- View & configure custom commands text file            $CLR_RESET"
+            Write-Host " $CLR_CYAN│  ${CLR_GREEN}/addcmd       ${CLR_RESET}  ${CLR_WHITE}- Add new custom command live to custom_commands.txt    $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/open <name|#>${CLR_RESET}  ${CLR_WHITE}- Open app, file, or item number from output $CLR_RESET"
 
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/list [drive] ${CLR_RESET}  ${CLR_WHITE}- List files & folders with category badges  $CLR_RESET"
@@ -5870,6 +6288,8 @@ function Select-InteractiveMenu {
                 @{ Key = "5"; Label = "Safety Rollback Recovery Engine";                       Action = "rollback" },
                 @{ Key = "6"; Label = "Switch Active AI Model (Groq, Gemini, Local)";         Action = "model" },
                 @{ Key = "7"; Label = "Shuffle Dynamic ASCII Cyberpunk Banner";                 Action = "banner" },
+                @{ Key = "8"; Label = "Windows Master Commands Catalog (250+ Tools)";           Action = "tools" },
+                @{ Key = "9"; Label = "Custom Commands & Tools Text File Guide";                Action = "custom" },
 
                 @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
 

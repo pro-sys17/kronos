@@ -1,0 +1,18 @@
+# ==============================================================================
+# KRONOS CUSTOM COMMANDS & GUI TOOLS CONFIGURATION
+# ==============================================================================
+# Bhai, aap yahan apne man-chahe koi bhi custom commands, software, GUI tools,
+# ya scripts add kar sakte hain. KRONOS inhe live detect karega!
+#
+# FORMAT:
+# trigger = command | description
+#
+# EXAMPLES:
+# chrome = chrome.exe | Google Chrome Web Browser
+# code = code . | Open VS Code in Current Directory
+# notepad = notepad.exe | Windows Notepad Editor
+# ==============================================================================
+
+chrome = chrome.exe | Google Chrome Web Browser
+calc = calc.exe | Windows Calculator
+notepad = notepad.exe | Windows Notepad Text Editor
