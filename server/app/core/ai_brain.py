@@ -327,10 +327,15 @@ class AIBrain:
 
 
     @property
+    def groq_api_keys(self) -> list:
+        raw = os.getenv("GROQ_API_KEYS", "") or os.getenv("GROQ_API_KEY", "")
+        keys = [k.strip() for k in raw.split(",") if k.strip()]
+        return keys
 
+    @property
     def groq_api_key(self) -> str:
-
-        return os.getenv("GROQ_API_KEY", "").strip()
+        keys = self.groq_api_keys
+        return keys[0] if keys else ""
 
 
 
@@ -4463,29 +4468,26 @@ class AIBrain:
 
 
 
-        headers = {
-
-            "Authorization": f"Bearer {self.groq_api_key}",
-
-            "Content-Type": "application/json"
-
-        }
-
-
-
         client = await self.get_client()
-
         last_error = None
 
+        keys_to_try = self.groq_api_keys or ([self.groq_api_key] if self.groq_api_key else [])
 
+        for key_idx, active_key in enumerate(keys_to_try):
+            headers = {
+                "Authorization": f"Bearer {active_key}",
+                "Content-Type": "application/json"
+            }
 
-        now_init = time.time()
-        # Auto-reset circuit breakers if all models are in cooldown to prevent 15+ minute lockouts
-        if all(self._CIRCUIT_BREAKER_UNTIL.get(m, 0) > now_init for m in self.groq_models):
-            print("[CIRCUIT-BREAKER] All models in cooldown; auto-resetting circuit breakers to attempt recovery...")
-            self._CIRCUIT_BREAKER_UNTIL.clear()
+            now_init = time.time()
+            if all(self._CIRCUIT_BREAKER_UNTIL.get(f"{key_idx}_{m}", 0) > now_init for m in self.groq_models):
+                self._CIRCUIT_BREAKER_UNTIL.clear()
 
-        for model in self.groq_models:
+            for model in self.groq_models:
+                cb_key = f"{key_idx}_{model}"
+                now = time.time()
+                if self._CIRCUIT_BREAKER_UNTIL.get(cb_key, 0) > now:
+                    continue
 
             now = time.time()
 
@@ -4571,7 +4573,7 @@ class AIBrain:
 
                             # Cap maximum cooldown at 30 seconds so transient rate limit bursts don't disable the system
                             cooldown = min(retry_after, 30.0)
-                            self._CIRCUIT_BREAKER_UNTIL[model] = time.time() + cooldown
+                            self._CIRCUIT_BREAKER_UNTIL[cb_key] = time.time() + cooldown
 
                             print(f"[CIRCUIT-BREAKER] Tripping circuit breaker for {model} for {cooldown:.0f}s (quota exhausted). Failing over immediately...")
 
@@ -4742,7 +4744,8 @@ class AIBrain:
 
 
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.gemini_api_key}"
+        gem_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{gem_model}:generateContent?key={self.gemini_api_key}"
 
         payload = {
 
