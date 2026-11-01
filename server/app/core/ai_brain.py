@@ -26,6 +26,16 @@ You must prioritize:
      Directly generate the exact, production-grade PowerShell command in `actions: [{"description": "...", "command": "..."}]`!
    - Keep `summary` to AT MOST ONE ultra-short, crisp line in natural Hinglish/English (e.g. "Bhai, ye rahe established ports:" or "Display driver refresh kar diya gaya.") or leave it blank so the Live System Output takes the spotlight!
    - Let the Live System Output speak for itself.
+   - When Professor asks to open a Windows GUI tool or Control Panel applet (e.g. "net user ka gui open karo", "power option ka gui open karo"):
+     Use `Start-Process <tool>`!
+     - User Accounts / Net User GUI: `Start-Process lusrmgr.msc` or `Start-Process netplwiz`
+     - Power Options GUI: `Start-Process powercfg.cpl`
+     - Network Adapters GUI: `Start-Process ncpa.cpl`
+     - Device Manager GUI: `Start-Process devmgmt.msc`
+     - Services GUI: `Start-Process services.msc`
+   - When Professor asks to filter or inspect a specific app's ports (e.g. "filter spotify port"):
+     Query that process's network connections:
+     `Get-Process -Name 'spotify*' -ErrorAction SilentlyContinue | ForEach-Object { Get-NetTCPConnection -OwningProcess $_.Id -ErrorAction SilentlyContinue } | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | Format-Table -AutoSize`
 4. ACCURATE SYSTEM COMMANDS (NEVER SUBSTITUTE OR HALLUCINATE):
    - CPU Details ("mere cpu ki details do", "processor details", "kitne cores he"):
      Query Win32_Processor:
@@ -3876,207 +3886,39 @@ class AIBrain:
 
 
 
-        # Step 4: Conversational/Ambiguity handling delegated to online LLM
-
-
-
-        if intent == "ACKNOWLEDGMENT":
-
-            return _finalize_and_record({
-
-                "issue_id": "SYS-ACK",
-
-                "root_cause": "User acknowledgment or appreciation",
-
-                "risk_level": "LOW",
-
-                "risk_color": "GREEN",
-
-                "summary": "Badhiya bhai! Khushi hui ki sab theek se ho gaya. Koi aur file, network issue ya system query ho toh batao!",
-
-                "actions": [],
-
-                "selected_tools": [],
-
-                "verification_command": "$true",
-
-                "requires_confirmation": False
-
-            })
-
-
-
-        if intent == "GREETING_CHITCHAT":
-
-            return _finalize_and_record({
-
-                "issue_id": "SYS-CHITCHAT",
-
-                "root_cause": "Greeting or casual chatter",
-
-                "risk_level": "LOW",
-
-                "risk_color": "CYAN",
-
-                "summary": "Hi Professor! Kaise ho bhai? Main KRONOS hoon, aapka autonomous Windows Co-Pilot. Koi diagnostic, system cleanup, network issue ya query ho toh batao!",
-
-                "actions": [],
-
-                "selected_tools": [],
-
-                "verification_command": "$true",
-
-                "requires_confirmation": False
-
-            })
-
-
-
-        if intent == "CANCELLATION":
-
-            return _finalize_and_record({
-
-                "issue_id": "SYS-CANCEL",
-
-                "root_cause": "User requested operation cancellation",
-
-                "risk_level": "LOW",
-
-                "risk_color": "CYAN",
-
-                "summary": "Theek hai bhai, koi changes execute nahi honge. Mast chill karo!",
-
-                "actions": [],
-
-                "selected_tools": [],
-
-                "verification_command": "$true",
-
-                "requires_confirmation": False
-
-            })
-
-
-
-        if intent == "AMBIGUOUS_QUERY":
-
-            return _finalize_and_record({
-
-                "issue_id": "SYS-AMBIGUOUS",
-
-                "root_cause": "User query lacks specific system component or target",
-
-                "risk_level": "LOW",
-
-                "risk_color": "CYAN",
-
-                "summary": "Bhai, query thodi unclear lag rahi hai. Aap kya diagnose ya fix karna chahte ho? Jaise ki: internet speed, high RAM/CPU usage, audio issue, ya disk cleanup?",
-
-                "actions": [],
-
-                "selected_tools": [],
-
-                "verification_command": "$true",
-
-                "requires_confirmation": False
-
-            })
-
-
-
-        # Step 5: Built-in Interactive TUIs and specialized system operations
-
-        # If user is in an active conversation (history present) or asking an explanation / follow-up,
-
-        # prioritize LLM reasoning over static heuristic interceptors (unless explicitly requested via '/')
-
-        # Static TUIs should ONLY trigger on explicit slash commands (e.g. /wifi, /top, /disk)
-
-        # or single standalone keywords (e.g. 'wifi', 'top', 'specs')
-
-        words = resolved_problem.strip().split()
-
-        single_word = resolved_problem.strip().lower()
-
+        # Step 4: Built-in Interactive TUIs and explicit slash shortcuts ONLY
+        # All natural language queries go 100% directly to online AI (Groq / Gemini)
         is_explicit_slash = resolved_problem.strip().startswith("/")
+        is_open_number = bool(re.match(r'^/open\s+\d+$', resolved_problem.strip(), re.IGNORECASE))
 
-        STANDALONE_TUI_WORDS = {
-
-            "wifi", "net", "top", "task", "specs", "sys", "disk", "storage",
-
-            "ports", "matrix", "doctor", "health", "boost", "clean", "startup",
-
-            "boot", "apps", "winget", "debloat", "services", "svc", "firewall",
-
-            "audio", "sound", "tree", "power", "battery", "devices", "cava", "bandwhich", "dust"
-
-        }
-
-        is_standalone_tui_word = (len(words) == 1 and single_word in STANDALONE_TUI_WORDS) or (len(words) == 2 and single_word in ["task manager", "system specs", "disk health", "wifi radar"])
-
-
-
-        if is_explicit_slash or is_standalone_tui_word:
-
+        if is_explicit_slash or is_open_number:
             tui_plan = self._check_tui_request(resolved_problem)
-
             if tui_plan:
-
                 return _finalize_and_record(tui_plan)
 
-
-
             net_plan = self._check_network_control_request(resolved_problem, history=history)
-
             if net_plan:
-
                 return _finalize_and_record(net_plan)
 
+            kill_plan = self._check_kill_request(resolved_problem)
+            if kill_plan:
+                return _finalize_and_record(kill_plan)
 
+            open_plan = self._check_open_request(resolved_problem, last_output=last_output, history=history)
+            if open_plan:
+                return _finalize_and_record(open_plan)
 
-        kill_plan = self._check_kill_request(resolved_problem)
+            delete_plan = self._check_delete_request(resolved_problem)
+            if delete_plan:
+                return _finalize_and_record(delete_plan)
 
-        if kill_plan:
-
-            return _finalize_and_record(kill_plan)
-
-
-
-        open_plan = self._check_open_request(resolved_problem, last_output=last_output, history=history)
-
-        if open_plan:
-
-            return _finalize_and_record(open_plan)
-
-
-
-        delete_plan = self._check_delete_request(resolved_problem)
-
-        if delete_plan:
-
-            return _finalize_and_record(delete_plan)
-
-
-
-        find_plan = self._check_find_request(resolved_problem)
-
-        if find_plan:
-
-            return _finalize_and_record(find_plan)
-
-
-
-        # Fast-path is only for slash commands or explicit commands, not for natural language questions
-
-        if is_explicit_slash:
+            find_plan = self._check_find_request(resolved_problem)
+            if find_plan:
+                return _finalize_and_record(find_plan)
 
             fast_plan = self._check_fast_path(resolved_problem)
-
             if fast_plan:
-
                 return _finalize_and_record(fast_plan)
-
-
 
         # Step 6: Query AI Providers or Fallback
 
@@ -4282,6 +4124,21 @@ class AIBrain:
             pass
 
 
+
+        if intent == "GREETING_CHITCHAT":
+            plan["issue_id"] = "SYS-CHITCHAT"
+            plan["risk_level"] = "LOW"
+            plan["actions"] = []
+
+        elif intent == "AMBIGUOUS_QUERY":
+            plan["issue_id"] = "SYS-AMBIGUOUS"
+            plan["risk_level"] = "LOW"
+            plan["actions"] = []
+
+        elif intent == "CANCELLATION":
+            plan["issue_id"] = "SYS-CANCEL"
+            plan["risk_level"] = "LOW"
+            plan["actions"] = []
 
         return _finalize_and_record(plan)
 
