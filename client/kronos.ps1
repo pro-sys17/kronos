@@ -4270,6 +4270,8 @@ function Dispatch-Problem($prob, [bool]$InChatMode = $false) {
 
         last_output   = $cleanLastOutput
 
+        model         = $script:ActiveModel
+
     } | ConvertTo-Json -Depth 6
 
 
@@ -4344,6 +4346,96 @@ function Dispatch-Problem($prob, [bool]$InChatMode = $false) {
 
 
 
+function Show-ModelSwitcherTUI {
+    param([string]$targetModel = $null)
+
+    # 1. Direct fast-switch if argument passed (e.g. /model gemini, /model qwen, /model local)
+    if ($targetModel) {
+        $mLower = $targetModel.Trim().ToLower()
+        $selected = $null
+        if ($mLower -match "gemini.*2") { $selected = "gemini-2.0-flash" }
+        elseif ($mLower -match "gemini.*1") { $selected = "gemini-1.5-flash" }
+        elseif ($mLower -eq "gemini") { $selected = "gemini-2.0-flash" }
+        elseif ($mLower -in @("qwen", "27b")) { $selected = "qwen/qwen3.8-27b" }
+        elseif ($mLower -in @("20b", "gpt-20b")) { $selected = "openai/gpt-oss-20b" }
+        elseif ($mLower -in @("120b", "gpt-120b")) { $selected = "openai/gpt-oss-120b" }
+        elseif ($mLower -in @("local", "offline")) { $selected = "local" }
+        elseif ($mLower -in @("auto", "hybrid", "default")) { $selected = "auto" }
+        else { $selected = $targetModel.Trim() }
+
+        $script:ActiveModel = $selected
+        try {
+            $headers = @{ "X-Session-Token" = $SessionToken }
+            $body = @{ model = $selected; session_token = $SessionToken } | ConvertTo-Json
+            Invoke-RestMethod -Uri "$ServerUrl/api/v1/model" -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -Headers $headers -ContentType "application/json; charset=utf-8" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null
+        } catch {}
+
+        Write-Host ""
+        Write-Host " ${CLR_GREEN}[✓] Active AI Model switched to: ${CLR_BOLD}${CLR_WHITE}$script:ActiveModel${CLR_RESET}"
+        Write-Host ""
+        return
+    }
+
+    # 2. Interactive TUI Model Selector Menu
+    $availableModels = @(
+        @{ id = "auto"; name = "Auto Hybrid Failover"; desc = "Smart failover across Groq, Gemini & Local [Recommended]" },
+        @{ id = "qwen/qwen3.8-27b"; name = "Groq: Qwen 2.5 27B"; desc = "Ultra-fast response with high reasoning" },
+        @{ id = "openai/gpt-oss-20b"; name = "Groq: GPT-OSS 20B"; desc = "Lightweight rapid logic engine" },
+        @{ id = "openai/gpt-oss-120b"; name = "Groq: GPT-OSS 120B"; desc = "High-parameter deep technical reasoning" },
+        @{ id = "gemini-2.0-flash"; name = "Google: Gemini 2.0 Flash"; desc = "Fast multimodal AI (1,500 RPD free tier)" },
+        @{ id = "gemini-1.5-flash"; name = "Google: Gemini 1.5 Flash"; desc = "Stable long-context cloud model" },
+        @{ id = "local"; name = "Local SysAdmin Engine"; desc = "0ms latency, zero API quota, direct execution" },
+        @{ id = "custom"; name = "Custom Model ID"; desc = "Enter your own custom model string" }
+    )
+
+    Write-Host ""
+    Write-Host " ${CLR_CYAN}╭─ [AI MODEL SELECTOR] ──────────────────────────────────────────────────────────${CLR_RESET}"
+    Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_MUTED}Current Active Model:${CLR_RESET} ${CLR_BOLD}${CLR_GREEN}[$script:ActiveModel]${CLR_RESET}"
+    Write-Host " ${CLR_CYAN}├──────────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+
+    for ($i = 0; $i -lt $availableModels.Count; $i++) {
+        $m = $availableModels[$i]
+        $num = $i + 1
+        $marker = if ($script:ActiveModel -eq $m.id) { "${CLR_GREEN}● [ACTIVE]${CLR_RESET}" } else { "          " }
+        Write-Host " ${CLR_CYAN}│${CLR_RESET}  ${CLR_WHITE}[$num]${CLR_RESET} ${CLR_CYAN}$($m.name.PadRight(26))${CLR_RESET} ${CLR_MUTED}$($m.desc)${CLR_RESET} $marker"
+    }
+
+    Write-Host " ${CLR_CYAN}╰──────────────────────────────────────────────────────────────────────────────${CLR_RESET}"
+    Write-Host ""
+    $choice = Read-Host " Select model [1-$($availableModels.Count)] or press Enter to keep current"
+
+    if ([string]::IsNullOrWhiteSpace($choice)) {
+        Write-Host " ${CLR_MUTED}[*] Model unchanged: $script:ActiveModel${CLR_RESET}"
+        return
+    }
+
+    $idx = 0
+    if ([int]::TryParse($choice.Trim(), [ref]$idx) -and $idx -ge 1 -and $idx -le $availableModels.Count) {
+        $selectedItem = $availableModels[$idx - 1]
+        if ($selectedItem.id -eq "custom") {
+            $customId = Read-Host " Enter custom model ID (e.g. llama-3.3-70b-versatile, mistralai/...) "
+            if (-not [string]::IsNullOrWhiteSpace($customId)) {
+                $script:ActiveModel = $customId.Trim()
+            }
+        } else {
+            $script:ActiveModel = $selectedItem.id
+        }
+
+        # Sync with backend server
+        try {
+            $headers = @{ "X-Session-Token" = $SessionToken }
+            $body = @{ model = $script:ActiveModel; session_token = $SessionToken } | ConvertTo-Json
+            Invoke-RestMethod -Uri "$ServerUrl/api/v1/model" -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -Headers $headers -ContentType "application/json; charset=utf-8" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null
+        } catch {}
+
+        Write-Host ""
+        Write-Host " ${CLR_GREEN}[✓] Active AI Model successfully switched to: ${CLR_BOLD}${CLR_WHITE}$script:ActiveModel${CLR_RESET}"
+        Write-Host ""
+    } else {
+        Write-Host " ${CLR_YELLOW}[!] Invalid selection. Keeping current model ($script:ActiveModel).${CLR_RESET}"
+    }
+}
+
 function Start-ConversationMode($initialPrompt = $null) {
 
     Clear-Host
@@ -4354,7 +4446,8 @@ function Start-ConversationMode($initialPrompt = $null) {
 
     Write-Host " $CLR_BOT_BORDER│  $CLR_WHITE Autonomous Windows Co-Pilot • Natural Hinglish / English$CLR_RESET"
 
-    Write-Host " $CLR_BOT_BORDER│  $CLR_MUTED Commands: ${CLR_GREEN}/help${CLR_MUTED} • ${CLR_GREEN}/open <#>${CLR_MUTED} • ${CLR_GREEN}/wifi${CLR_MUTED} • ${CLR_GREEN}/disk${CLR_MUTED} • ${CLR_GREEN}/specs${CLR_MUTED} • ${CLR_GREEN}/top${CLR_MUTED} • ${CLR_GREEN}/tree$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│  $CLR_MUTED Commands: ${CLR_GREEN}/help${CLR_MUTED} • ${CLR_GREEN}/model${CLR_MUTED} • ${CLR_GREEN}/open <#>${CLR_MUTED} • ${CLR_GREEN}/wifi${CLR_MUTED} • ${CLR_GREEN}/disk${CLR_MUTED} • ${CLR_GREEN}/specs${CLR_MUTED} • ${CLR_GREEN}/top${CLR_MUTED} • ${CLR_GREEN}/tree$CLR_RESET"
+    Write-Host " $CLR_BOT_BORDER│  $CLR_MUTED Active Model: ${CLR_CYAN}[$script:ActiveModel]${CLR_MUTED} (Type ${CLR_GREEN}/model${CLR_MUTED} to switch AI engine)$CLR_RESET"
 
     Write-BotBoxBottom
 
@@ -4410,6 +4503,7 @@ function Start-ConversationMode($initialPrompt = $null) {
 
             Write-Host " $CLR_CYAN│$CLR_RESET"
 
+            Write-Host " $CLR_CYAN│  ${CLR_GREEN}/model [name] ${CLR_RESET}  ${CLR_WHITE}- Switch active AI engine (Groq, Gemini, Local, Custom) $CLR_RESET"
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/open <name|#>${CLR_RESET}  ${CLR_WHITE}- Open app, file, or item number from output $CLR_RESET"
 
             Write-Host " $CLR_CYAN│  ${CLR_GREEN}/list [drive] ${CLR_RESET}  ${CLR_WHITE}- List files & folders with category badges  $CLR_RESET"

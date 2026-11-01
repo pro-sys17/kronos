@@ -155,6 +155,68 @@ class AIBrain:
         MemoryStore.initialize()
 
         self._client: Optional[httpx.AsyncClient] = None
+        self._active_model: str = os.getenv("DEFAULT_MODEL", "auto").strip() or "auto"
+
+    @property
+    def active_model(self) -> str:
+        return self._active_model
+
+    def set_active_model(self, model: str) -> str:
+        self._active_model = model.strip() if model else "auto"
+        return self._active_model
+
+    def get_available_models(self) -> list:
+        return [
+            {
+                "id": "auto",
+                "name": "Auto Hybrid Failover",
+                "provider": "HYBRID",
+                "description": "Smart failover across Groq, Gemini & Local",
+                "active": self.active_model == "auto"
+            },
+            {
+                "id": "qwen/qwen3.8-27b",
+                "name": "Groq: Qwen 2.5 27B",
+                "provider": "GROQ",
+                "description": "Ultra-fast response with high reasoning",
+                "active": self.active_model == "qwen/qwen3.8-27b"
+            },
+            {
+                "id": "openai/gpt-oss-20b",
+                "name": "Groq: GPT-OSS 20B",
+                "provider": "GROQ",
+                "description": "Lightweight rapid logic engine",
+                "active": self.active_model == "openai/gpt-oss-20b"
+            },
+            {
+                "id": "openai/gpt-oss-120b",
+                "name": "Groq: GPT-OSS 120B",
+                "provider": "GROQ",
+                "description": "High-parameter deep technical reasoning",
+                "active": self.active_model == "openai/gpt-oss-120b"
+            },
+            {
+                "id": "gemini-2.0-flash",
+                "name": "Google: Gemini 2.0 Flash",
+                "provider": "GEMINI",
+                "description": "SOTA fast multimodal AI (1,500 RPD free tier)",
+                "active": self.active_model == "gemini-2.0-flash"
+            },
+            {
+                "id": "gemini-1.5-flash",
+                "name": "Google: Gemini 1.5 Flash",
+                "provider": "GEMINI",
+                "description": "Stable long-context cloud model",
+                "active": self.active_model == "gemini-1.5-flash"
+            },
+            {
+                "id": "local",
+                "name": "Local SysAdmin Engine",
+                "provider": "LOCAL",
+                "description": "0ms latency, zero API quota, direct execution",
+                "active": self.active_model == "local"
+            }
+        ]
 
 
 
@@ -3924,7 +3986,8 @@ class AIBrain:
 
         last_output: Optional[str] = None,
 
-        session_token: Optional[str] = None
+        session_token: Optional[str] = None,
+        requested_model: Optional[str] = None
 
     ) -> Dict[str, Any]:
 
@@ -4045,69 +4108,62 @@ class AIBrain:
         if gui_plan:
             return _finalize_and_record(gui_plan)
 
-        # Step 6: Query AI Providers or Fallback
+        # Step 6: Query AI Providers or Fallback with Active Model Selection
 
         plan: Optional[Dict[str, Any]] = None
+        active_m = (requested_model or self.active_model or "auto").strip().lower()
+        detected_dom = detected_domain or intent_info.domain or HinglishProcessor.detect_domain(resolved_problem)
 
+        # Mode A: Explicit Local SysAdmin Engine
+        if active_m in ["local", "offline"]:
+            offline_plan = self._local_expert_engine(resolved_problem, telemetry, intent=intent)
+            if offline_plan:
+                return _finalize_and_record(offline_plan)
 
-
-        # Provider 1: Groq Cloud
-
-        if self.groq_api_key:
-
+        # Mode B: Explicit Gemini Selection
+        if ("gemini" in active_m) and self.gemini_api_key:
             try:
-
-                detected_dom = detected_domain or intent_info.domain or HinglishProcessor.detect_domain(resolved_problem)
-
-                plan = await self._query_groq(
-
+                plan = await self._query_gemini(
                     resolved_problem,
-
                     telemetry,
-
                     history=history,
-
                     last_output=last_output,
-
                     intent=intent,
-
-                    domain=detected_dom
-
+                    domain=detected_dom,
+                    model_override=active_m
                 )
-
             except Exception as e:
+                print(f"[!] Gemini inference error ({active_m}): {e}")
 
+        # Mode C: Groq Model Selection or Auto
+        if not plan and self.groq_api_key and active_m != "local":
+            try:
+                groq_override = active_m if active_m != "auto" and not active_m.startswith("gemini") else None
+                plan = await self._query_groq(
+                    resolved_problem,
+                    telemetry,
+                    history=history,
+                    last_output=last_output,
+                    intent=intent,
+                    domain=detected_dom,
+                    model_override=groq_override
+                )
+            except Exception as e:
                 print(f"[!] Groq inference error: {e}")
 
-
-
-        # Provider 2: Gemini
-
-        if not plan and self.gemini_api_key:
-
+        # Mode D: Automatic Failover to Gemini if Groq failed or not tried
+        if not plan and self.gemini_api_key and "gemini" not in active_m and active_m != "local":
             try:
-
-                detected_dom = detected_domain or intent_info.domain or HinglishProcessor.detect_domain(resolved_problem)
-
                 plan = await self._query_gemini(
-
                     resolved_problem,
-
                     telemetry,
-
                     history=history,
-
                     last_output=last_output,
-
                     intent=intent,
-
                     domain=detected_dom
-
                 )
-
             except Exception as e:
-
-                print(f"[!] Gemini inference error: {e}")
+                print(f"[!] Gemini failover error: {e}")
 
 
 
@@ -4361,7 +4417,9 @@ class AIBrain:
 
         intent: Optional[str] = None,
 
-        domain: Optional[str] = None
+        domain: Optional[str] = None,
+
+        model_override: Optional[str] = None
 
     ) -> Dict[str, Any]:
 
@@ -4483,7 +4541,8 @@ class AIBrain:
             if all(self._CIRCUIT_BREAKER_UNTIL.get(f"{key_idx}_{m}", 0) > now_init for m in self.groq_models):
                 self._CIRCUIT_BREAKER_UNTIL.clear()
 
-            for model in self.groq_models:
+            models_to_run = [model_override] if model_override else self.groq_models
+            for model in models_to_run:
                 cb_key = f"{key_idx}_{model}"
                 now = time.time()
                 if self._CIRCUIT_BREAKER_UNTIL.get(cb_key, 0) > now:
@@ -4661,7 +4720,9 @@ class AIBrain:
 
         intent: Optional[str] = None,
 
-        domain: Optional[str] = None
+        domain: Optional[str] = None,
+
+        model_override: Optional[str] = None
 
     ) -> Dict[str, Any]:
 
@@ -4744,7 +4805,7 @@ class AIBrain:
 
 
 
-        gem_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+        gem_model = model_override if model_override and "gemini" in model_override else (os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{gem_model}:generateContent?key={self.gemini_api_key}"
 
         payload = {

@@ -29,6 +29,11 @@ class DiagnoseRequest(BaseModel):
     session_token: Optional[str] = None
     history: Optional[list] = None
     last_output: Optional[str] = None
+    model: Optional[str] = None
+
+class SwitchModelRequest(BaseModel):
+    model: str
+    session_token: Optional[str] = None
 
 @router.get("/health")
 async def health_check():
@@ -139,6 +144,29 @@ async def get_session():
     token = SecurityManager.generate_session_token()
     return {"status": "SUCCESS", "session_token": token}
 
+@router.get("/api/v1/models")
+async def get_models():
+    """
+    Returns available models, active model, and capabilities.
+    """
+    return {
+        "status": "SUCCESS",
+        "active_model": brain.active_model,
+        "available_models": brain.get_available_models()
+    }
+
+@router.post("/api/v1/model")
+async def switch_model(req: SwitchModelRequest):
+    """
+    Switches active AI model on the fly.
+    """
+    new_model = brain.set_active_model(req.model)
+    return {
+        "status": "SUCCESS",
+        "active_model": new_model,
+        "message": f"Active AI model switched to: {new_model}"
+    }
+
 @router.post("/api/v1/diagnose")
 async def diagnose_problem(req: DiagnoseRequest, request: Request, x_session_token: Optional[str] = Header(None)):
     """
@@ -166,7 +194,8 @@ async def diagnose_problem(req: DiagnoseRequest, request: Request, x_session_tok
         telemetry_data,
         history=req.history,
         last_output=req.last_output,
-        session_token=token
+        session_token=token,
+        requested_model=req.model
     )
     return verdict
 
