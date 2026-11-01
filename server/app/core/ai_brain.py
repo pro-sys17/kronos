@@ -196,18 +196,18 @@ class AIBrain:
                 "active": self.active_model == "openai/gpt-oss-120b"
             },
             {
-                "id": "gemini-2.0-flash",
+                "id": "gemini-3.5-flash",
                 "name": "Google: Gemini 2.0 Flash",
                 "provider": "GEMINI",
                 "description": "SOTA fast multimodal AI (1,500 RPD free tier)",
-                "active": self.active_model == "gemini-2.0-flash"
+                "active": self.active_model == "gemini-3.5-flash"
             },
             {
-                "id": "gemini-1.5-flash",
+                "id": "gemini-3.1-flash-lite",
                 "name": "Google: Gemini 1.5 Flash",
                 "provider": "GEMINI",
                 "description": "Stable long-context cloud model",
-                "active": self.active_model == "gemini-1.5-flash"
+                "active": self.active_model == "gemini-3.1-flash-lite"
             },
             {
                 "id": "local",
@@ -4805,7 +4805,7 @@ class AIBrain:
 
 
 
-        gem_model = model_override if model_override and "gemini" in model_override else (os.getenv("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash")
+        gem_model = model_override if model_override and "gemini" in model_override else (os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip() or "gemini-3.5-flash")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{gem_model}:generateContent?key={self.gemini_api_key}"
 
         payload = {

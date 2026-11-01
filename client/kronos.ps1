@@ -4353,9 +4353,9 @@ function Show-ModelSwitcherTUI {
     if ($targetModel) {
         $mLower = $targetModel.Trim().ToLower()
         $selected = $null
-        if ($mLower -match "gemini.*2") { $selected = "gemini-2.0-flash" }
-        elseif ($mLower -match "gemini.*1") { $selected = "gemini-1.5-flash" }
-        elseif ($mLower -eq "gemini") { $selected = "gemini-2.0-flash" }
+        if ($mLower -match "gemini.*2") { $selected = "gemini-3.5-flash" }
+        elseif ($mLower -match "gemini.*1") { $selected = "gemini-3.1-flash-lite" }
+        elseif ($mLower -eq "gemini") { $selected = "gemini-3.5-flash" }
         elseif ($mLower -in @("qwen", "27b")) { $selected = "qwen/qwen3.8-27b" }
         elseif ($mLower -in @("20b", "gpt-20b")) { $selected = "openai/gpt-oss-20b" }
         elseif ($mLower -in @("120b", "gpt-120b")) { $selected = "openai/gpt-oss-120b" }
@@ -4382,8 +4382,8 @@ function Show-ModelSwitcherTUI {
         @{ id = "qwen/qwen3.8-27b"; name = "Groq: Qwen 2.5 27B"; desc = "Ultra-fast response with high reasoning" },
         @{ id = "openai/gpt-oss-20b"; name = "Groq: GPT-OSS 20B"; desc = "Lightweight rapid logic engine" },
         @{ id = "openai/gpt-oss-120b"; name = "Groq: GPT-OSS 120B"; desc = "High-parameter deep technical reasoning" },
-        @{ id = "gemini-2.0-flash"; name = "Google: Gemini 2.0 Flash"; desc = "Fast multimodal AI (1,500 RPD free tier)" },
-        @{ id = "gemini-1.5-flash"; name = "Google: Gemini 1.5 Flash"; desc = "Stable long-context cloud model" },
+        @{ id = "gemini-3.5-flash"; name = "Google: Gemini 3.5 Flash"; desc = "Fast multimodal AI (1,500 RPD free tier)" },
+        @{ id = "gemini-3.1-flash-lite"; name = "Google: Gemini 3.1 Flash Lite"; desc = "Stable long-context cloud model" },
         @{ id = "local"; name = "Local SysAdmin Engine"; desc = "0ms latency, zero API quota, direct execution" },
         @{ id = "custom"; name = "Custom Model ID"; desc = "Enter your own custom model string" }
     )
