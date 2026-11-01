@@ -331,10 +331,10 @@ SKILLS: List[SkillPlaybook] = [
         description="Inspects active security shield profiles, listening ports, and blocked outbound connections.",
         supported_intents=["TROUBLESHOOTING_REQUEST", "ACTION_REQUEST", "SYSTEM_INFO_REQUEST"],
         natural_triggers=[
-            "firewall", "defender", "port", "ports", "antivirus", "blocked connection", 
-            "firewall turn off", "firewall turn on", "security check"
+            "firewall", "defender", "antivirus", "blocked connection", 
+            "firewall turn off", "firewall turn on", "security check", "firewall status"
         ],
-        example_queries=["Firewall status check karo", "Listening ports dikhao", "Enable firewall"],
+        example_queries=["Firewall status check karo", "Defender status check karo", "Enable firewall"],
         required_system_context=[],
         diagnostic_procedure=[
             "1. Audit listening network ports using network.list_ports",
