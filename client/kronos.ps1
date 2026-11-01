@@ -16,6 +16,13 @@ param(
 
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
+# Active AI Model state (Auto-synced with Neural Core)
+$script:ActiveModel = "gemini-3.1-flash-lite"
+try {
+    $mInfo = Invoke-RestMethod -Uri "$ServerUrl/api/v1/models" -TimeoutSec 1 -ErrorAction SilentlyContinue
+    if ($mInfo -and $mInfo.active_model) { $script:ActiveModel = $mInfo.active_model }
+} catch {}
+
 
 
 # Color and formatting definitions (ANSI)
@@ -4466,43 +4473,47 @@ function Dispatch-Problem($prob, [bool]$InChatMode = $false) {
 function Show-ModelSwitcherTUI {
     param([string]$targetModel = $null)
 
-    # 1. Direct fast-switch if argument passed (e.g. /model gemini, /model qwen, /model local)
+    # 1. Direct fast-switch if argument passed (e.g. /model gemini, /model 2, /model local)
     if ($targetModel) {
         $mLower = $targetModel.Trim().ToLower()
-        $selected = $null
-        if ($mLower -match "gemini.*2") { $selected = "gemini-3.5-flash" }
-        elseif ($mLower -match "gemini.*1") { $selected = "gemini-3.1-flash-lite" }
-        elseif ($mLower -eq "gemini") { $selected = "gemini-3.5-flash" }
-        elseif ($mLower -in @("qwen", "27b")) { $selected = "qwen/qwen3.8-27b" }
-        elseif ($mLower -in @("20b", "gpt-20b")) { $selected = "openai/gpt-oss-20b" }
-        elseif ($mLower -in @("120b", "gpt-120b")) { $selected = "openai/gpt-oss-120b" }
-        elseif ($mLower -in @("local", "offline")) { $selected = "local" }
-        elseif ($mLower -in @("auto", "hybrid", "default")) { $selected = "auto" }
-        else { $selected = $targetModel.Trim() }
+        if ($mLower -in @("switch", "menu", "select", "list", "show", "help", "")) {
+            $targetModel = $null
+        } else {
+            $selected = $null
+            if ($mLower -in @("1", "auto", "hybrid", "default")) { $selected = "auto" }
+            elseif ($mLower -in @("2", "gemini-lite", "lite") -or $mLower -match "gemini.*(lite|3\.1|1)") { $selected = "gemini-3.1-flash-lite" }
+            elseif ($mLower -in @("3", "gemini-flash", "flash") -or $mLower -match "gemini.*(flash|3\.5|2)") { $selected = "gemini-3.5-flash" }
+            elseif ($mLower -in @("4", "local", "offline", "sysadmin")) { $selected = "local" }
+            elseif ($mLower -in @("5", "qwen", "27b")) { $selected = "qwen/qwen3.8-27b" }
+            elseif ($mLower -in @("6", "20b", "gpt-20b", "gpt")) { $selected = "openai/gpt-oss-20b" }
+            elseif ($mLower -in @("7", "120b", "gpt-120b")) { $selected = "openai/gpt-oss-120b" }
+            elseif ($mLower -eq "gemini") { $selected = "gemini-3.1-flash-lite" }
+            else { $selected = $targetModel.Trim() }
 
-        $script:ActiveModel = $selected
-        try {
-            $headers = @{ "X-Session-Token" = $SessionToken }
-            $body = @{ model = $selected; session_token = $SessionToken } | ConvertTo-Json
-            Invoke-RestMethod -Uri "$ServerUrl/api/v1/model" -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -Headers $headers -ContentType "application/json; charset=utf-8" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null
-        } catch {}
+            $script:ActiveModel = $selected
+            try {
+                $headers = @{ "X-Session-Token" = $SessionToken }
+                $body = @{ model = $selected; session_token = $SessionToken } | ConvertTo-Json
+                Invoke-RestMethod -Uri "$ServerUrl/api/v1/model" -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -Headers $headers -ContentType "application/json; charset=utf-8" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null
+            } catch {}
 
-        Write-Host ""
-        Write-Host " ${CLR_GREEN}[✓] Active AI Model switched to: ${CLR_BOLD}${CLR_WHITE}$script:ActiveModel${CLR_RESET}"
-        Write-Host ""
-        return
+            Write-Host ""
+            Write-Host " ${CLR_GREEN}[✓] Active AI Model switched to: ${CLR_BOLD}${CLR_WHITE}$script:ActiveModel${CLR_RESET}"
+            Write-Host ""
+            return
+        }
     }
 
     # 2. Interactive TUI Model Selector Menu
     $availableModels = @(
-        @{ id = "auto"; name = "Auto Hybrid Failover"; desc = "Smart failover across Groq, Gemini & Local [Recommended]" },
-        @{ id = "qwen/qwen3.8-27b"; name = "Groq: Qwen 2.5 27B"; desc = "Ultra-fast response with high reasoning" },
-        @{ id = "openai/gpt-oss-20b"; name = "Groq: GPT-OSS 20B"; desc = "Lightweight rapid logic engine" },
-        @{ id = "openai/gpt-oss-120b"; name = "Groq: GPT-OSS 120B"; desc = "High-parameter deep technical reasoning" },
-        @{ id = "gemini-3.5-flash"; name = "Google: Gemini 3.5 Flash"; desc = "Fast multimodal AI (1,500 RPD free tier)" },
-        @{ id = "gemini-3.1-flash-lite"; name = "Google: Gemini 3.1 Flash Lite"; desc = "Stable long-context cloud model" },
-        @{ id = "local"; name = "Local SysAdmin Engine"; desc = "0ms latency, zero API quota, direct execution" },
-        @{ id = "custom"; name = "Custom Model ID"; desc = "Enter your own custom model string" }
+        @{ id = "auto";                  name = "Auto Hybrid Failover";    desc = "Smart failover: Gemini Lite -> Groq -> Local [Recommended]" },
+        @{ id = "gemini-3.1-flash-lite"; name = "Google: Gemini 3.1 Lite"; desc = "Lightning-fast, Free Quota Active [Stable & Live]" },
+        @{ id = "gemini-3.5-flash";      name = "Google: Gemini 3.5 Flash";desc = "Deep multimodal reasoning (Subject to daily quotas)" },
+        @{ id = "local";                 name = "Local SysAdmin Engine";   desc = "0ms latency, zero API quota, direct execution" },
+        @{ id = "qwen/qwen3.8-27b";      name = "Groq: Qwen 2.5 27B";      desc = "Ultra-fast response with high reasoning" },
+        @{ id = "openai/gpt-oss-20b";    name = "Groq: GPT-OSS 20B";       desc = "Lightweight rapid logic engine" },
+        @{ id = "openai/gpt-oss-120b";   name = "Groq: GPT-OSS 120B";      desc = "High-parameter deep technical reasoning" },
+        @{ id = "custom";                name = "Custom Model ID";         desc = "Enter your own custom model string" }
     )
 
     Write-Host ""
@@ -4519,7 +4530,7 @@ function Show-ModelSwitcherTUI {
 
     Write-Host " ${CLR_CYAN}╰──────────────────────────────────────────────────────────────────────────────${CLR_RESET}"
     Write-Host ""
-    $choice = Read-Host " Select model [1-$($availableModels.Count)] or press Enter to keep current"
+    $choice = Read-Host " Select model [1-$($availableModels.Count)] or type name (e.g. gemini, local, qwen)"
 
     if ([string]::IsNullOrWhiteSpace($choice)) {
         Write-Host " ${CLR_MUTED}[*] Model unchanged: $script:ActiveModel${CLR_RESET}"
@@ -4537,20 +4548,31 @@ function Show-ModelSwitcherTUI {
         } else {
             $script:ActiveModel = $selectedItem.id
         }
-
-        # Sync with backend server
-        try {
-            $headers = @{ "X-Session-Token" = $SessionToken }
-            $body = @{ model = $script:ActiveModel; session_token = $SessionToken } | ConvertTo-Json
-            Invoke-RestMethod -Uri "$ServerUrl/api/v1/model" -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -Headers $headers -ContentType "application/json; charset=utf-8" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null
-        } catch {}
-
-        Write-Host ""
-        Write-Host " ${CLR_GREEN}[✓] Active AI Model successfully switched to: ${CLR_BOLD}${CLR_WHITE}$script:ActiveModel${CLR_RESET}"
-        Write-Host ""
     } else {
-        Write-Host " ${CLR_YELLOW}[!] Invalid selection. Keeping current model ($script:ActiveModel).${CLR_RESET}"
+        $cLower = $choice.Trim().ToLower()
+        if ($cLower -in @("auto", "hybrid")) { $script:ActiveModel = "auto" }
+        elseif ($cLower -in @("lite", "gemini-lite") -or $cLower -match "gemini.*(lite|3\.1)") { $script:ActiveModel = "gemini-3.1-flash-lite" }
+        elseif ($cLower -in @("flash", "gemini-flash") -or $cLower -match "gemini.*(flash|3\.5)") { $script:ActiveModel = "gemini-3.5-flash" }
+        elseif ($cLower -eq "gemini") { $script:ActiveModel = "gemini-3.1-flash-lite" }
+        elseif ($cLower -in @("local", "offline", "sysadmin")) { $script:ActiveModel = "local" }
+        elseif ($cLower -match "qwen") { $script:ActiveModel = "qwen/qwen3.8-27b" }
+        elseif ($cLower -match "gpt") { $script:ActiveModel = "openai/gpt-oss-20b" }
+        else {
+            Write-Host " ${CLR_YELLOW}[!] Unknown model choice. Keeping current model ($script:ActiveModel).${CLR_RESET}"
+            return
+        }
     }
+
+    # Sync with backend server
+    try {
+        $headers = @{ "X-Session-Token" = $SessionToken }
+        $body = @{ model = $script:ActiveModel; session_token = $SessionToken } | ConvertTo-Json
+        Invoke-RestMethod -Uri "$ServerUrl/api/v1/model" -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -Headers $headers -ContentType "application/json; charset=utf-8" -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null
+    } catch {}
+
+    Write-Host ""
+    Write-Host " ${CLR_GREEN}[✓] Active AI Model successfully switched to: ${CLR_BOLD}${CLR_WHITE}$script:ActiveModel${CLR_RESET}"
+    Write-Host ""
 }
 
 function Start-ConversationMode($initialPrompt = $null) {
@@ -4573,40 +4595,63 @@ function Start-ConversationMode($initialPrompt = $null) {
 
 
     if ($initialPrompt) {
+        $initTrim = $initialPrompt.Trim()
+        $initLower = $initTrim.ToLower()
 
-        Write-UserPromptBox
-
-        Write-Host "$initialPrompt"
-
-        Dispatch-Problem $initialPrompt -InChatMode $true
-
+        if ($initLower -in @("switch model", "change model", "select model", "model switch") -or $initLower -match '^[/\s]*model(s)?(\s+(.*))?$') {
+            $mArg = $Matches[3]
+            Show-ModelSwitcherTUI $mArg
+            $initialPrompt = $null
+        }
+        elseif ($initLower -match '^[/\s]*banner(\s+(.*))?$') {
+            $bArg = $Matches[2]
+            Switch-KronosBanner $bArg
+            $initialPrompt = $null
+        }
+        else {
+            Write-UserPromptBox
+            Write-Host "$initialPrompt"
+            Dispatch-Problem $initialPrompt -InChatMode $true
+        }
     }
 
-
-
     while ($true) {
-
         Write-UserPromptBox
-
         $prompt = Read-Host
 
-
-
         if ([string]::IsNullOrWhiteSpace($prompt)) {
-
             continue
-
         }
-
         if ($prompt -match '^\s*\|\s*[-:\s|]+\|\s*$' -or $prompt -match '^\s*\|\s*Command\s*\|' -or $prompt -match '^\s*##\s*\d+\.\s*') {
-
             continue
-
         }
-
-
 
         $pLower = $prompt.Trim().ToLower()
+
+        # Direct Model Switcher (/model, model, /models, models, /model gemini, /model 2, switch model, Hinglish)
+        if ($pLower -in @("switch model", "change model", "select model", "model switch", "switch to gemini", "switch to local", "switch to qwen") -or
+            $pLower -match '^[/\s]*model(s)?(\s+(.*))?$' -or
+            $pLower -match 'model\s*(switch|change|badlo|karo)' -or
+            $pLower -match '(switch|change)\s*(to\s*)?(model\s*)?(gemini|qwen|gpt|local)') {
+            
+            $mArg = $Matches[3]
+            if (-not $mArg) {
+                if ($pLower -match 'gemini.*lite|lite') { $mArg = "gemini-3.1-flash-lite" }
+                elseif ($pLower -match 'gemini') { $mArg = "gemini-3.1-flash-lite" }
+                elseif ($pLower -match 'qwen') { $mArg = "qwen/qwen3.8-27b" }
+                elseif ($pLower -match 'local') { $mArg = "local" }
+                elseif ($pLower -match 'gpt') { $mArg = "openai/gpt-oss-20b" }
+            }
+            Show-ModelSwitcherTUI $mArg
+            continue
+        }
+
+        # Dynamic ASCII Banner switcher (/banner, banner, /banner 1..5)
+        if ($pLower -match '^[/\s]*banner(\s+(.*))?$') {
+            $bArg = $Matches[2]
+            Switch-KronosBanner $bArg
+            continue
+        }
 
 
 
@@ -5501,6 +5546,8 @@ function Show-CommandPalette {
         @{ Slug = "/rollback";  Name = "Safety Rollback Recovery Engine";             Action = "rollback" },
 
         @{ Slug = "/chat";      Name = "Open Autonomous AI Chatbot (Natural Chat)";    Action = "chat" },
+        @{ Slug = "/model";     Name = "Switch Active AI Model (Groq, Gemini, Local)"; Action = "model" },
+        @{ Slug = "/banner";    Name = "Shuffle Dynamic ASCII Cyberpunk Banners";      Action = "banner" },
 
         @{ Slug = "/memory";    Name = "Persistent Memory & Past Chat Summaries";      Action = "memory" },
 
@@ -5821,6 +5868,8 @@ function Select-InteractiveMenu {
                 @{ Key = "4"; Label = "Install Global 'kronos' Terminal Command";              Action = "install-cli" },
 
                 @{ Key = "5"; Label = "Safety Rollback Recovery Engine";                       Action = "rollback" },
+                @{ Key = "6"; Label = "Switch Active AI Model (Groq, Gemini, Local)";         Action = "model" },
+                @{ Key = "7"; Label = "Shuffle Dynamic ASCII Cyberpunk Banner";                 Action = "banner" },
 
                 @{ Key = "b"; Label = "Back to Main Workspace";                                Action = "back" }
 
@@ -5950,7 +5999,7 @@ function Select-InteractiveMenu {
 
 
 
-        Write-Host "  ${CLR_MUTED}↑/↓: Navigate • Enter: Select • 1-5,0: Direct Jump • Ctrl+K: Palette • c: Chat • q: Exit${CLR_RESET}$ESC[K"
+        Write-Host "  ${CLR_MUTED}↑/↓: Navigate • Enter: Select • 1-5,0: Direct Jump • Ctrl+K: Palette • m: Model • b: Banner • c: Chat • q: Exit${CLR_RESET}$ESC[K"
 
 
 
@@ -6052,6 +6101,16 @@ function Select-InteractiveMenu {
 
             ([ConsoleKey]::NumPad0) { $chosenCat = $categories[5] }
 
+            ([ConsoleKey]::M) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "model"
+            }
+            ([ConsoleKey]::B) {
+                try { [Console]::CursorVisible = $true } catch {}
+                Write-Host "$ESC[?25h" -NoNewline
+                return "banner"
+            }
             ([ConsoleKey]::C) {
 
                 try { [Console]::CursorVisible = $true } catch {}
@@ -6398,7 +6457,43 @@ while ($true) {
 
 
 
+    $selLower = $selection.Trim().ToLower()
+
+    # Direct model switch commands from Main Menu
+    if ($selLower -in @("switch model", "change model", "select model", "model switch", "switch to gemini", "switch to local", "switch to qwen") -or
+        $selLower -match '^[/\s]*model(s)?(\s+(.*))?$' -or
+        $selLower -match 'model\s*(switch|change|badlo|karo)' -or
+        $selLower -match '(switch|change)\s*(to\s*)?(model\s*)?(gemini|qwen|gpt|local)') {
+        
+        $mArg = $Matches[3]
+        if (-not $mArg) {
+            if ($selLower -match 'gemini.*lite|lite') { $mArg = "gemini-3.1-flash-lite" }
+            elseif ($selLower -match 'gemini') { $mArg = "gemini-3.1-flash-lite" }
+            elseif ($selLower -match 'qwen') { $mArg = "qwen/qwen3.8-27b" }
+            elseif ($selLower -match 'local') { $mArg = "local" }
+            elseif ($selLower -match 'gpt') { $mArg = "openai/gpt-oss-20b" }
+        }
+        Show-ModelSwitcherTUI $mArg
+        Show-Banner
+        continue
+    }
+
+    if ($selLower -match '^[/\s]*banner(\s+(.*))?$') {
+        $bArg = $Matches[2]
+        Switch-KronosBanner $bArg
+        Show-Banner
+        continue
+    }
+
     switch ($selection.Trim().ToLower()) {
+        "model"        { Show-ModelSwitcherTUI; Show-Banner; continue }
+        "/model"       { Show-ModelSwitcherTUI; Show-Banner; continue }
+        "models"       { Show-ModelSwitcherTUI; Show-Banner; continue }
+        "/models"      { Show-ModelSwitcherTUI; Show-Banner; continue }
+        "switch model" { Show-ModelSwitcherTUI; Show-Banner; continue }
+        "change model" { Show-ModelSwitcherTUI; Show-Banner; continue }
+        "banner"       { Switch-KronosBanner; Show-Banner; continue }
+        "/banner"      { Switch-KronosBanner; Show-Banner; continue }
 
         "0"    { Write-Host " $CLR_GREEN[*] Terminating KRONOS session.$CLR_RESET"; break }
 

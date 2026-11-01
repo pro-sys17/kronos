@@ -85,6 +85,8 @@ from .authorization import OperationAuthorizer
 import time
 
 import random
+import logging
+logger = logging.getLogger("kronos.ai_brain")
 
 
 
@@ -224,7 +226,7 @@ class AIBrain:
 
         if self._client is None or self._client.is_closed:
 
-            self._client = httpx.AsyncClient(timeout=12.0)
+            self._client = httpx.AsyncClient(timeout=25.0)
 
         return self._client
 
@@ -789,6 +791,40 @@ class AIBrain:
         """
 
         p = problem.lower().strip()
+
+        if p in ["/model", "model", "/models", "models", "switch model", "change model"]:
+            return {
+                "issue_id": "SYS-TUI-MODEL",
+                "root_cause": "Request to launch KRONOS AI Model Switcher TUI",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": "Launching KRONOS Interactive AI Model Switcher...",
+                "actions": [{"description": "Launch Model Switcher TUI", "command": "Show-ModelSwitcherTUI"}],
+                "verification_command": "$true"
+            }
+
+        if p.startswith("/model ") or p.startswith("model "):
+            target = p.split(maxsplit=1)[1].strip()
+            return {
+                "issue_id": "SYS-TUI-MODEL-DIRECT",
+                "root_cause": f"Request to switch active model to {target}",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": f"Switching KRONOS active model to: {target}",
+                "actions": [{"description": f"Switch to model {target}", "command": f"Show-ModelSwitcherTUI '{target}'"}],
+                "verification_command": "$true"
+            }
+
+        if p in ["/banner", "banner", "/banners", "banners"]:
+            return {
+                "issue_id": "SYS-TUI-BANNER",
+                "root_cause": "Request to shuffle dynamic ASCII cyberpunk banner",
+                "risk_level": "LOW",
+                "risk_color": "CYAN",
+                "summary": "Shuffling KRONOS dynamic ASCII banner...",
+                "actions": [{"description": "Shuffle Banner", "command": "Switch-KronosBanner"}],
+                "verification_command": "$true"
+            }
 
 
 
@@ -4073,8 +4109,10 @@ class AIBrain:
         # All natural language queries go 100% directly to online AI (Groq / Gemini)
         is_explicit_slash = resolved_problem.strip().startswith("/")
         is_open_number = bool(re.match(r'^/open\s+\d+$', resolved_problem.strip(), re.IGNORECASE))
+        is_model_request = bool(re.match(r'^[\s/]*model(s)?(\s+.*)?$', resolved_problem.strip(), re.IGNORECASE))
+        is_banner_request = bool(re.match(r'^[\s/]*banner(s)?(\s+.*)?$', resolved_problem.strip(), re.IGNORECASE))
 
-        if is_explicit_slash or is_open_number:
+        if is_explicit_slash or is_open_number or is_model_request or is_banner_request:
             tui_plan = self._check_tui_request(resolved_problem)
             if tui_plan:
                 return _finalize_and_record(tui_plan)
@@ -4805,32 +4843,33 @@ class AIBrain:
 
 
 
-        gem_model = model_override if model_override and "gemini" in model_override else (os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip() or "gemini-3.5-flash")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{gem_model}:generateContent?key={self.gemini_api_key}"
+        primary_gem = model_override if model_override and "gemini" in model_override else (os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip() or "gemini-3.1-flash-lite")
+        gem_models = [primary_gem]
+        if not model_override:
+            fallback = "gemini-3.1-flash-lite" if primary_gem != "gemini-3.1-flash-lite" else "gemini-3.5-flash"
+            gem_models.append(fallback)
 
         payload = {
-
             "contents": [{"parts": [{"text": "\n\n".join(parts)}]}],
-
             "generationConfig": {"response_mime_type": "application/json"}
-
         }
 
-
-
+        last_exc = None
         client = await self.get_client()
-
-        resp = await client.post(url, json=payload)
-
-        resp.raise_for_status()
-
-        data = resp.json()
-
-        raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-
-        plan = safe_parse_json(raw_text)
-
-        return plan
+        for gm in gem_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gm}:generateContent?key={self.gemini_api_key}"
+            try:
+                resp = await client.post(url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                raw_text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                plan = safe_parse_json(raw_text)
+                return plan
+            except Exception as e:
+                last_exc = e
+                logger.warning(f"[!] Gemini model {gm} failed: {e}. Trying fallback if available...")
+                continue
+        raise last_exc
 
 
 
