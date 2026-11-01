@@ -43,7 +43,7 @@ class IntentClassifier:
     """
 
     CANCELLATION_PATTERNS = [
-        r"^(nahi|no|nope|cancel|abort|mat karo|don't|dont|stop)(\s+(karo|mat karo|bhai|it))?$",
+        r"^(nahi|na|no|nope|cancel|abort|mat karo|don't|dont|stop)(\s+(karo|mat karo|bhai|it))?$",
         r"\b(rehne do|rehne de|kuch mat karo|kuch mat kr|chhod do|chhod de|cancel it|stop nothing to do)\b"
     ]
 

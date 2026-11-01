@@ -1850,6 +1850,7 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
 
     # 1. Informational / Chat Response (No commands needed)
     if ($actionsList.Count -eq 0) {
+        $script:LastCommandOutput = ""
         if ($InChatMode) {
             Write-Host ""
             Write-BotBoxTop "KRONOS"
@@ -2023,6 +2024,8 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
 
     if ($outputItems.Count -gt 0) {
         $script:LastCommandOutput = $outputItems -join "`n"
+    } else {
+        $script:LastCommandOutput = ""
     }
 
     # Verify Operation Result

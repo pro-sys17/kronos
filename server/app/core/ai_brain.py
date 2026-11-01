@@ -64,9 +64,22 @@ You must prioritize:
    - When Professor asks for "filter established ports" or "sare establish ports filter kro":
      `Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | Format-Table -AutoSize`
 
-6. CONCEPTUAL QUERIES ONLY:
-   - Provide technical explanations, comparisons, or markdown tables ONLY when Professor explicitly asks conceptual questions (e.g. "DNS kya hota hai", "NTFS vs exFAT difference", "explain TCP handshake").
-   - When asked to DO something ("dikhao", "filter", "refresh", "kill", "clean", "restart", "show", "get"), DO IT DIRECTLY.
+6. COMMAND LISTINGS & INQUIRIES vs EXECUTION:
+   - When Professor asks to LIST, PRINT, TELL, or ENUMERATE available commands or tools (e.g. "cmds print kro", "sarri cmds batao", "tum kitne gui cmd jante ho", "or bhi cmds hongi na", "to un sabko show karo na", "list all gui tools", "kitne popup cmd hote hai"):
+     - NEVER execute Start-Process or trigger arbitrary commands!
+     - Instead, LIST all the commands cleanly in `summary` (e.g. formatted bulleted list with command and purpose: `netplwiz` - User Accounts, `powercfg.cpl` - Power Options, `ncpa.cpl` - Network Connections, `devmgmt.msc` - Device Manager, `services.msc` - Services, `compmgmt.msc` - Computer Management, `taskmgr.exe` - Task Manager, `sysdm.cpl` - System Properties, `appwiz.cpl` - Programs & Features, `firewall.cpl` - Windows Firewall, `eventvwr.msc` - Event Viewer, `perfmon.msc` - Performance Monitor, `secpol.msc` - Security Policy, `gpedit.msc` - Group Policy, `regedit.exe` - Registry Editor, `taskschd.msc` - Task Scheduler, `cleanmgr.exe` - Disk Cleanup, `dfrgui.exe` - Drive Optimizer)!
+     - Set `actions: []`!
+   - When Professor asks to OPEN or LAUNCH a GUI tool (e.g. "net user ka gui open karo", "power option kholo", "open devmgmt", "device manager chalu karo"):
+     - Generate action: `Start-Process <tool>`.
+
+7. CONTEXT & PREVIOUS COMMAND OUTPUT INTEGRITY:
+   - If `[Output from previous command on user's system]` is provided:
+     - Reference or filter it ONLY when Professor explicitly asks to inspect, filter, or explain THAT output (e.g. "is output me se spotify filter karo", "inme se 443 port dikhao").
+     - If Professor has shifted topic (e.g. asking about GUI commands, system settings, or general questions like "to un sabko show karo na"), DO NOT repeat, re-run, or confuse the previous command output with the current inquiry!
+
+8. CONCEPTUAL QUERIES:
+   - Provide technical explanations, comparisons, or markdown tables when Professor asks conceptual or informative questions (e.g. "DNS kya hota hai", "NTFS vs exFAT difference", "explain TCP handshake").
+   - When asked to DO something on the system ("dikhao", "filter", "refresh", "kill", "clean", "restart", "get"), execute it directly.
 
 OUTPUT FORMAT (Strictly valid JSON, no markdown code block backticks outside JSON):
 {
@@ -4263,7 +4276,7 @@ class AIBrain:
         if last_output:
             c_out = self._compact_command_output(last_output)
             if c_out:
-                user_parts.append(f"[Output from previous command on user's system]:\n```{c_out}```")
+                user_parts.append(f"[Output from previous command on user's system (Reference ONLY if user asks to filter/analyze it)]:\n```{c_out}```")
 
         if telemetry and not history:
 
@@ -4542,7 +4555,7 @@ class AIBrain:
         if last_output:
             c_out = self._compact_command_output(last_output)
             if c_out:
-                parts.append(f"Previous Command Output:\n{c_out}")
+                parts.append(f"Previous Command Output (Reference ONLY if user asks to filter/analyze it):\n{c_out}")
 
         if telemetry:
 

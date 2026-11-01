@@ -17,7 +17,6 @@ class HinglishProcessor:
         r"\bnhi\b": "nahi",
         r"\bnh\b": "nahi",
         r"\bni\b": "nahi",
-        r"\bna\b": "nahi",
         r"\bhai\b": "hai",
         r"\bhe\b": "hai",
         r"\bh\b": "hai",
@@ -83,6 +82,11 @@ class HinglishProcessor:
         t = re.sub(r'[\r\n\t]', ' ', t)
         t = re.sub(r'[!?,.:;"]', ' ', t)
         t = re.sub(r'\s+', ' ', t).strip()
+
+        # Remove trailing imperative/request particles "na" (e.g. "karo na", "dikhao na", "batao na", "show karo na")
+        t = re.sub(r'\b(karo|dikhao|batao|do|kijiye|show|print|bhejo|bolo|likho)\s+na\b', r'\1', t)
+        # Normalize negative pre-verb "na" (e.g. "na ho", "na chal raha", "na karo") to "nahi"
+        t = re.sub(r'\bna\s+(karo|hoga|hai|chal|de|le|kar|chalta|ho|chalra)\b', r'nahi \1', t)
 
         for pattern, replacement in cls.PHONETIC_MAP.items():
             t = re.sub(pattern, replacement, t)
