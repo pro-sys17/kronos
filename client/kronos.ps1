@@ -4154,16 +4154,14 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
 
             }
 
-        } catch {
-
+                } catch {
+            $errMsg = $_.Exception.Message
             if (-not $InChatMode) {
-
                 Write-Host " $CLR_RED[FAILED]$CLR_RESET"
-
-                Write-Host "      $CLR_RED$($_.Exception.Message)$CLR_RESET"
-
+                Write-Host "      $CLR_RED$errMsg$CLR_RESET"
+            } else {
+                $outputItems += "[!] Execution notice: $errMsg"
             }
-
         }
 
     }
@@ -4304,10 +4302,14 @@ function Execute-RemediationPlan($plan, [bool]$InChatMode = $false) {
 
                 Write-Host " $CLR_BOT_BORDER│ $CLR_YELLOW  [!] Search completed, but no matching files or folders were found.$CLR_RESET"
 
-            } else {
-
-                Write-Host " $CLR_BOT_BORDER│ $CLR_GREEN  [✓] Action completed successfully.$CLR_RESET"
-
+                        } else {
+                $actNames = @()
+                foreach ($a in $actionsList) {
+                    if ($a.description) { $actNames += $a.description }
+                    elseif ($a.tool_name) { $actNames += $a.tool_name }
+                }
+                $actSummary = if ($actNames.Count -gt 0) { $actNames -join ", " } else { "Action" }
+                Write-Host " $CLR_BOT_BORDER│ $CLR_GREEN  [✓] $actSummary completed successfully.$CLR_RESET"
             }
 
         }

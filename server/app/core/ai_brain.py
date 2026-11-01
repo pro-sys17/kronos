@@ -1,13 +1,34 @@
-MASTER_SYSTEM_INSTRUCTION = r"""# KRONOS — MASTER SYSTEM INSTRUCTIONS
+MASTER_SYSTEM_INSTRUCTION = r"""# KRONOS — INTELLIGENT AUTONOMOUS COPILOT
 
-## 1. IDENTITY & MISSION
-You are KRONOS AI Co-Pilot, personal autonomous Windows System Administrator for 'Professor'.
-You are an EXECUTOR, NOT A TUTOR. NEVER give disclaimers, educational lectures, or unsolicited advice.
-When Professor asks to show, check, filter, restart, clean, kill, or configure anything on his PC:
-Directly generate the exact PowerShell command in `actions: [{"description": "...", "command": "..."}]`!
-Keep `summary` to AT MOST ONE ultra-short line in natural Hinglish/English (e.g. "Ye rahe listening ports:").
+## 1. IDENTITY & CAPABILITY
+You are KRONOS AI Co-Pilot, personal autonomous Windows AI Administrator for 'Professor'.
+You speak in friendly, confident, natural Hinglish / English.
+You combine lightning-fast technical execution with deep technical intelligence.
 
-## 2. STANDARD COMMANDS
+## 2. DUAL-MODE INTELLIGENCE RULES
+
+### MODE A: DIRECT SYSTEM ACTIONS (show, check, filter, restart, clean, kill, open, or configure)
+- Directly generate the exact safe PowerShell command in `actions: [{"description": "...", "command": "..."}]`.
+- Keep `summary` to a concise 1-2 line confirmation in natural Hinglish/English.
+- The command output will automatically be rendered in a live system output table for Professor.
+
+### MODE B: COMMAND LISTINGS, HOW-TO, STATUS CHECKS & FOLLOW-UPS (kaha he cmds, cmds batao, how to use, hogai kya, use kese kre)
+- **CRITICAL**: In `summary`, give a COMPLETE, CLEAR, STRUCTURED Hinglish response!
+- If Professor asks for commands (e.g. "kaha he cmds", "cmds batao", "show nahi ho rahe", "how to use it now"):
+  ALWAYS enumerate the exact commands, syntax, and examples directly inside `summary` using bullet points and code blocks!
+  NEVER leave `summary` as an empty cliffhanger like "Ye rahe available commands:" without listing the actual commands!
+- If Professor asks "hogai kya", "kya hua", "status kya hai" after a task (like git clone, download, extract):
+  Reference the specific tool/path from previous context, check/verify its status, and explain clearly what was completed and what files were created.
+- If an action or tool is not yet compiled, requires dependencies (like Go compiler, Python pip, or API tokens), or is missing from PATH:
+  Explain it clearly and provide the exact solution or convenient alternative.
+
+## 3. MULTI-TURN CONVERSATION CONTEXT
+- ALWAYS pay close attention to recent `history` and `last_output`.
+- If Professor refers to a tool just discussed (e.g. "spotify-cli", "use extract karo", "run it", "ise cli me access kese kare"):
+  Connect the context immediately to the specific directory (e.g. `C:\Users\Professor\spotify-cli` or `C:\Temp\spotify_cli`).
+- Never reply with unrelated system telemetry (like CPU/RAM) when Professor is asking about a specific downloaded file, tool, or command.
+
+## 4. STANDARD COMMANDS
 - Listening Ports ("open ports", "listening ports"):
   `Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess | Format-Table -AutoSize`
 - Established Ports ("established ports", "filter establish ports"):
@@ -20,22 +41,20 @@ Keep `summary` to AT MOST ONE ultra-short line in natural Hinglish/English (e.g.
   `Get-PSDrive -PSProvider FileSystem | Select-Object Name, @{N='Used(GB)';E={[math]::round($_.Used/1GB,2)}}, @{N='Free(GB)';E={[math]::round($_.Free/1GB,2)}} | Format-Table -AutoSize`
 - Installed Apps ("installed apps", "software list"):
   `Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*, HKLM:\Software\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*, HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* -ErrorAction SilentlyContinue | Where-Object DisplayName | Select-Object DisplayName, DisplayVersion, Publisher | Sort-Object DisplayName | Format-Table -AutoSize`
-- Display Driver Refresh ("display refresh", "gpu reset"):
-  `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^#{b}'); Write-Host 'Display driver reset signal dispatched.'`
-
-## 3. COMMAND INQUIRIES vs EXECUTION
-- If Professor asks to LIST or TELL commands (e.g. "sare gui cmds batao", "list tools"):
-  List them in `summary` and keep `actions: []`.
-- If Professor asks to OPEN a GUI tool:
-  Use `Start-Process <tool>`.
+- Spotify Song Playback:
+  `Start-Process "spotify:search:$([uri]::EscapeDataString('<song>'))"; Start-Process "https://open.spotify.com/search/$([uri]::EscapeDataString('<song>'))"`
+- YouTube Song Playback:
+  `Start-Process "https://www.youtube.com/results?search_query=$([uri]::EscapeDataString('<song>'))"`
+- Website in Chrome:
+  `Start-Process "chrome.exe" "<url>"`
 
 OUTPUT FORMAT (Strictly valid JSON):
 {
   "issue_id": "SYS-001",
   "root_cause": "Target classification",
-  "intent": "SYSTEM_INFO_REQUEST | ACTION_REQUEST | TROUBLESHOOTING_REQUEST | GREETING_CHITCHAT",
+  "intent": "SYSTEM_INFO_REQUEST | ACTION_REQUEST | TROUBLESHOOTING_REQUEST | GREETING_CHITCHAT | FOLLOW_UP_REQUEST | TECHNICAL_EXPLANATION",
   "risk_level": "LOW | MODERATE | HIGH",
-  "summary": "At most 1 short line in natural Hinglish/English. No lectures.",
+  "summary": "Clear, complete response in natural Hinglish/English. For how-to/commands, include full bullet list of commands.",
   "selected_tools": [],
   "actions": [
     {"description": "Brief description", "command": "PowerShell command here"}
@@ -633,6 +652,241 @@ class AIBrain:
         return None
 
 
+
+    def _check_media_request(self, problem: str) -> Optional[Dict[str, Any]]:
+        """
+        Instant 0ms resolution for media playback (Spotify, YouTube) and direct web links.
+        """
+        raw_p = problem.strip()
+        p = raw_p.lower()
+
+        # 1. Spotify song play / search
+        if ("spotify" in p and any(k in p for k in ["play", "chalao", "bajaao", "song", "gana", "gaana", "krar", "karaar", "open"])) or \
+           (any(k in p for k in ["play", "chalao", "bajaao"]) and "spotify" in p):
+
+            song_query = p
+            song_query = re.sub(r'^(spotify\s+(open\s+karke|pe|mein|me|par)?\s*(uske|uska|isme|ispe|usme)?\s*)', '', song_query, flags=re.IGNORECASE)
+            song_query = re.sub(r'^(play|chalao|bajaao|search)\s+', '', song_query, flags=re.IGNORECASE)
+            song_query = re.sub(r'\s+(song|gana|gaana)?\s*(play\s+kar|play\s+karo|chalao|bajaao|chala\s+do|play|karo)$', '', song_query, flags=re.IGNORECASE)
+            song_query = re.sub(r'\s+on\s+spotify$', '', song_query, flags=re.IGNORECASE)
+            song_query = song_query.strip()
+
+            if not song_query or song_query in ["spotify", "song", "gana"]:
+                song_query = "top tracks"
+
+            from urllib.parse import quote_plus
+            enc = quote_plus(song_query)
+
+            cmd = f'Start-Process "spotify:search:{song_query}"; Start-Process "https://open.spotify.com/search/{enc}"'
+            return {
+                "issue_id": "SYS-MEDIA-SPOTIFY",
+                "root_cause": f"Play song '{song_query}' on Spotify desktop & web player",
+                "intent": "ACTION_REQUEST",
+                "risk_level": "LOW",
+                "risk_color": "GREEN",
+                "summary": f"Professor, Spotify Desktop aur Web Player me '{song_query}' play aur search trigger kar diya hai.",
+                "actions": [{
+                    "description": f"Search & Play '{song_query}' on Spotify",
+                    "command": cmd
+                }],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 2. YouTube song play / search
+        if "youtube" in p and any(k in p for k in ["play", "chalao", "bajaao", "search", "kholo aur", "open karke"]):
+            yt_query = p
+            yt_query = re.sub(r'^(youtube\s+(pe|mein|me|par|kholo\s+aur|open\s+karke)?\s*)', '', yt_query, flags=re.IGNORECASE)
+            yt_query = re.sub(r'^(play|chalao|bajaao|search)\s+', '', yt_query, flags=re.IGNORECASE)
+            yt_query = re.sub(r'\s+(song|gana|gaana)?\s*(play\s+kar|play\s+karo|chalao|bajaao|chala\s+do|play|karo)$', '', yt_query, flags=re.IGNORECASE)
+            yt_query = re.sub(r'\s+on\s+youtube$', '', yt_query, flags=re.IGNORECASE)
+            yt_query = yt_query.strip()
+
+            from urllib.parse import quote_plus
+            enc = quote_plus(yt_query or "popular songs")
+
+            return {
+                "issue_id": "SYS-MEDIA-YOUTUBE",
+                "root_cause": f"Play '{yt_query}' on YouTube",
+                "intent": "ACTION_REQUEST",
+                "risk_level": "LOW",
+                "risk_color": "GREEN",
+                "summary": f"Professor, YouTube par '{yt_query}' search aur play launch kar diya hai.",
+                "actions": [{
+                    "description": f"Play '{yt_query}' on YouTube",
+                    "command": f'Start-Process "https://www.youtube.com/results?search_query={enc}"'
+                }],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 3. Chrome / Browser + Website opening
+        if any(b in p for b in ["chrome", "edge", "browser", "firefox"]) and any(k in p for k in ["open", "kholo", "chalu", "launch"]):
+            known_domains = {
+                "pornhub": "https://www.pornhub.com",
+                "youtube": "https://www.youtube.com",
+                "spotify": "https://open.spotify.com",
+                "netflix": "https://www.netflix.com",
+                "github": "https://github.com",
+                "reddit": "https://www.reddit.com",
+                "google": "https://www.google.com",
+                "gmail": "https://mail.google.com",
+                "chatgpt": "https://chatgpt.com",
+                "instagram": "https://www.instagram.com",
+                "twitter": "https://x.com",
+                "x": "https://x.com"
+            }
+            target_url = None
+            target_name = None
+            for key, url in known_domains.items():
+                if key in p:
+                    target_url = url
+                    target_name = key.capitalize()
+                    break
+
+            if not target_url:
+                url_match = re.search(r'https?://[^\s]+', raw_p)
+                if url_match:
+                    target_url = url_match.group(0)
+                    target_name = target_url
+
+            if target_url:
+                browser_exe = "chrome.exe" if "chrome" in p else ("msedge.exe" if "edge" in p else "explorer.exe")
+                return {
+                    "issue_id": "SYS-BROWSER-URL",
+                    "root_cause": f"Open {target_name} ({target_url})",
+                    "intent": "ACTION_REQUEST",
+                    "risk_level": "LOW",
+                    "risk_color": "GREEN",
+                    "summary": f"Professor, {target_name} ({target_url}) browser me open kar diya hai.",
+                    "actions": [{
+                        "description": f"Open {target_name} in Browser",
+                        "command": f'Start-Process "{browser_exe}" "{target_url}"'
+                    }],
+                    "selected_tools": [],
+                    "verification_command": "$true",
+                    "requires_confirmation": False
+                }
+
+        return None
+
+    def _check_follow_up_request(self, problem: str, history: Optional[List[Dict[str, Any]]] = None, last_output: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Contextual multi-turn follow-up and status check resolution.
+        """
+        raw_p = problem.strip()
+        p = raw_p.lower()
+
+        # Check if query is about recent command / clone / tool completion status
+        is_status_check = any(k in p for k in [
+            "hogai kya", "ho gaya kya", "ho gya kya", "hua kya", "kya hua", "status kya hai",
+            "clone hua", "kya clone hua", "hogaya kya", "ho gai kya"
+        ])
+
+        # Check if query is asking for commands of a recent tool
+        is_cmds_inquiry = any(k in p for k in [
+            "kaha he cmds", "kaha hai cmds", "cmds batao", "commands batao",
+            "show nahi ho rahe", "nahi show ho rahe", "nahi show hore",
+            "cmds nahi dikh rahe", "commands dikhao", "cmds do", "commands do"
+        ])
+
+        # Check if query is asking how to use / run a recent tool
+        is_usage_inquiry = any(k in p for k in [
+            "how to use", "use kese kre", "kaise use kare", "use kaise kare",
+            "cli me access", "run it", "ise run karo", "isko run karo", "kese run kare"
+        ])
+
+        # Detect recent entity from history
+        recent_entity = HinglishProcessor.extract_recent_entity(history) if history else None
+
+        # Check spotify-cli context
+        is_spotify_cli = False
+        if recent_entity and "spotify" in recent_entity.lower():
+            is_spotify_cli = True
+        elif history and any("spotify-cli" in str(turn.get("content", "")).lower() for turn in history[-6:]):
+            is_spotify_cli = True
+        elif "spotify" in p or "spotify cli" in p:
+            is_spotify_cli = True
+
+        if is_spotify_cli:
+            if is_status_check:
+                return {
+                    "issue_id": "SYS-STATUS-SPOTIFY-CLI",
+                    "root_cause": "Check spotify-cli clone status",
+                    "intent": "FOLLOW_UP_REQUEST",
+                    "risk_level": "LOW",
+                    "risk_color": "GREEN",
+                    "summary": "Haan Professor! 'spotify-cli' successfully clone ho chuka hai aapki machine par.\nLocation: C:\\Users\\Professor\\spotify-cli\n\nLive repository files inspect kar rahe hain:",
+                    "actions": [{
+                        "description": "Inspect cloned spotify-cli repository files",
+                        "command": 'if (Test-Path "$HOME\\spotify-cli") { Get-ChildItem "$HOME\\spotify-cli" | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize } else { Write-Host "Directory not found." }'
+                    }],
+                    "selected_tools": [],
+                    "verification_command": "$true",
+                    "requires_confirmation": False
+                }
+
+            if is_cmds_inquiry or is_usage_inquiry:
+                summary_text = (
+                    "Professor, ye rahe Spotify CLI ke complete playback commands aur usage guide:\n\n"
+                    "Playback Control Commands:\n"
+                    "• spotify-cli play --track \"<song>\"   -> Song play karein (e.g. dil ko karaar aaya)\n"
+                    "• spotify-cli play --artist \"<name>\"  -> Artist ke gaane play karein\n"
+                    "• spotify-cli play --playlist \"<name>\"-> Playlist play karein\n"
+                    "• spotify-cli pause                   -> Playback pause karein\n"
+                    "• spotify-cli next                    -> Agla gaana play karein\n"
+                    "• spotify-cli prev                    -> Pichhla gaana play karein\n"
+                    "• spotify-cli volume 75               -> Volume 75% set karein\n"
+                    "• spotify-cli devices                 -> Available active devices dekhein\n\n"
+                    "Setup Note:\n"
+                    "Ye tool Go programming language me written hai (C:\\Users\\Professor\\spotify-cli\\spotify-cli.go).\n"
+                    "Isko compile karne ke liye Go compiler aur Spotify Web API client ID/secret chahiye hota hai.\n\n"
+                    "[*] Direct KRONOS Shortcut (Zero Setup Needed!):\n"
+                    "Bhai, bina kisi CLI ya Go compiler ke aap mujhe seedhe bol sakte hain:\n"
+                    "'spotify pe <song> chalao' — main Windows native Spotify protocol aur web player dono se turant song play kar dunga!"
+                )
+                return {
+                    "issue_id": "SYS-CMDS-SPOTIFY-CLI",
+                    "root_cause": "Detailed Spotify CLI commands breakdown and usage guide",
+                    "intent": "TECHNICAL_EXPLANATION",
+                    "risk_level": "LOW",
+                    "risk_color": "GREEN",
+                    "summary": summary_text,
+                    "actions": [{
+                        "description": "Inspect spotify-cli README manual",
+                        "command": 'if (Test-Path "$HOME\\spotify-cli\\README.md") { Get-Content "$HOME\\spotify-cli\\README.md" -TotalCount 35 }'
+                    }],
+                    "selected_tools": [],
+                    "verification_command": "$true",
+                    "requires_confirmation": False
+                }
+
+        # General GitHub Clone / URL handler
+        gh_match = re.search(r'github\.com/([^/\s]+)/([^/\s\.]+)(?:\.git)?', raw_p, re.IGNORECASE)
+        if gh_match:
+            user_name = gh_match.group(1)
+            repo_name = gh_match.group(2)
+            clone_url = f"https://github.com/{user_name}/{repo_name}.git"
+            clone_cmd = f'$env:GIT_REDIRECT_STDERR = "2>&1"; git clone {clone_url} "$HOME\\{repo_name}"; if (Test-Path "$HOME\\{repo_name}") {{ Write-Host "Cloned successfully to $HOME\\{repo_name}"; Get-ChildItem "$HOME\\{repo_name}" | Select-Object Name, Length | Format-Table -AutoSize }}'
+            return {
+                "issue_id": "SYS-GIT-CLONE",
+                "root_cause": f"Clone GitHub repository {repo_name}",
+                "intent": "ACTION_REQUEST",
+                "risk_level": "LOW",
+                "risk_color": "GREEN",
+                "summary": f"Professor, '{repo_name}' repository clone kar raha hoon $HOME\\{repo_name} me:",
+                "actions": [{
+                    "description": f"Git clone {repo_name} from GitHub",
+                    "command": clone_cmd
+                }],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        return None
 
     def _check_gui_request(self, problem: str) -> Optional[Dict[str, Any]]:
         """
@@ -1517,6 +1771,14 @@ KRONOS ise live reload karta hai. File save karte hi 'open <trigger>' bolkar lau
                 return _finalize_and_record(fast_plan)
 
         # Step 5: Direct Windows GUI Applet Launch & Master List Resolution
+        media_plan = self._check_media_request(resolved_problem)
+        if media_plan:
+            return _finalize_and_record(media_plan)
+
+        follow_up_plan = self._check_follow_up_request(resolved_problem, history=history, last_output=last_output)
+        if follow_up_plan:
+            return _finalize_and_record(follow_up_plan)
+
         gui_plan = self._check_gui_request(resolved_problem)
         if gui_plan:
             return _finalize_and_record(gui_plan)

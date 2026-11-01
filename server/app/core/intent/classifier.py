@@ -73,6 +73,7 @@ class IntentClassifier:
     EXPLANATION_PATTERNS = [
         r"\b(kya hai|kya hota hai|kya hoti hai|explain karo|batao kya hai|what is|how does|why does|difference between)\b",
         r"\b(kaise kaam karta hai|ka matlab kya hai|meaning of|kise kehte hai)\b",
+        r"\b(how to use|kaise use kare|kese use kare|cmds kya hai|commands list|available commands|kaha he cmds|cmds batao)\b",
         r"^(what is|how does|why is|explain)\b"
     ]
 
@@ -85,14 +86,15 @@ class IntentClassifier:
 
     ACTION_PATTERNS = [
         r"\b(flush karo|restart karo|clean karo|clear karo|delete karo|kill karo|close karo|stop karo)\b",
-        r"\b(turn on|turn off|enable karo|disable karo|chalu karo|band karo|reset karo)\b",
-        r"^(flush|restart|kill|stop|start|clean|clear|enable|disable)\s+"
+        r"\b(turn on|turn off|enable karo|disable karo|chalu karo|band karo|reset karo|play karo|chalao)\b",
+        r"^(flush|restart|kill|stop|start|clean|clear|enable|disable|play)\s+"
     ]
 
     FOLLOW_UP_PATTERNS = [
-        r"\b(ab |aur |fir |then |now |next )?\b(ise|isko|isey|use|usko|it|this)\b\s*(fix karo|solve karo|theek karo|restart karo|check karo)",
-        r"\b(ab ise fix karo|ab isko theek karo|fix it|repair it|do it now|solve this)\b",
-        r"\b(kya ye theek hua|kya solve hua|check again|fir se check karo)\b"
+        r"\b(ab |aur |fir |then |now |next )?\b(ise|isko|isey|use|usko|it|this)\b\s*(fix karo|solve karo|theek karo|restart karo|check karo|run karo|chalao)",
+        r"\b(ab ise fix karo|ab isko theek karo|fix it|repair it|do it now|solve this|run it|run this)\b",
+        r"\b(kya ye theek hua|kya solve hua|check again|fir se check karo)\b",
+        r"\b(hogai\s+kya|ho\s+gaya\s+kya|ho\s+gya\s+kya|hua\s+kya|kya\s+hua|status\s+kya\s+hai|kaha\s+he|kaha\s+hai|cmds\s+batao|commands\s+batao|show\s+nahi\s+ho\s+rahe|nahi\s+show\s+ho\s+rahe|kese\s+use\s+kre|how\s+to\s+use|use\s+kese\s+kre|kaise\s+use\s+kare)\b"
     ]
 
     @classmethod
@@ -110,52 +112,49 @@ class IntentClassifier:
             if re.match(pat, norm):
                 return IntentResult(IntentType.CONFIRMATION, 0.98, domain=resolved_domain, normalized_query=norm)
 
-        # 3. Ambiguity check
+        # 3. Follow-up intent check (Checked BEFORE Ambiguity so 'hogai kya' or 'kaha he cmds' are NEVER flagged ambiguous)
+        for pat in cls.FOLLOW_UP_PATTERNS:
+            if re.search(pat, norm) or re.search(pat, augmented_query.lower()):
+                return IntentResult(
+                    IntentType.FOLLOW_UP_REQUEST,
+                    0.95,
+                    domain=resolved_domain or "software",
+                    normalized_query=norm,
+                    context_inferred=resolved_domain or "software"
+                )
+
+        # 4. Ambiguity check
         for pat in cls.AMBIGUOUS_PATTERNS:
             if re.search(pat, norm) or re.search(pat, query.lower()):
                 return IntentResult(IntentType.AMBIGUOUS_QUERY, 0.90, domain=None, normalized_query=norm)
 
-        # 4. Acknowledgment & Gratitude check
+        # 5. Acknowledgment & Gratitude check
         for pat in cls.ACKNOWLEDGMENT_PATTERNS:
             if re.search(pat, norm) or re.search(pat, query.lower()):
                 return IntentResult(IntentType.ACKNOWLEDGMENT, 0.95, domain=None, normalized_query=norm)
 
-        # 5. Chit-chat / Greetings / Idle check
+        # 6. Chit-chat / Greetings / Idle check
         for pat in cls.CHITCHAT_PATTERNS:
             if re.search(pat, norm) or re.search(pat, query.lower()):
                 return IntentResult(IntentType.GREETING_CHITCHAT, 0.95, domain=None, normalized_query=norm)
 
-        # 5. Follow-up intent check
-        for pat in cls.FOLLOW_UP_PATTERNS:
-            if re.search(pat, norm):
-                return IntentResult(
-                    IntentType.FOLLOW_UP_REQUEST,
-                    0.92,
-                    domain=resolved_domain,
-                    normalized_query=norm,
-                    context_inferred=resolved_domain
-                )
-
-        # 6. System Information Request (Checked before general explanation)
+        # 7. System Information Request (Checked before general explanation)
         for pat in cls.SYSTEM_INFO_PATTERNS:
-            if re.search(pat, norm) or re.search(pat, query.lower()):
+            if re.search(pat, norm):
                 return IntentResult(IntentType.SYSTEM_INFO_REQUEST, 0.92, domain=resolved_domain, normalized_query=norm)
 
-        # 7. Technical explanation (Educational - Zero commands)
+        # 8. Technical Explanation Request
         for pat in cls.EXPLANATION_PATTERNS:
             if re.search(pat, norm):
                 return IntentResult(IntentType.TECHNICAL_EXPLANATION, 0.90, domain=resolved_domain, normalized_query=norm)
 
-        # 8. Explicit Action Request
+        # 9. Explicit Action Request
         for pat in cls.ACTION_PATTERNS:
             if re.search(pat, norm):
-                return IntentResult(IntentType.ACTION_REQUEST, 0.92, domain=resolved_domain, normalized_query=norm)
-
-        # 9. Troubleshooting Request (Problem symptoms)
-        domain = resolved_domain or HinglishProcessor.detect_domain(norm) or HinglishProcessor.detect_domain(query)
-        trouble_indicators = ["slow", "lag", "hang", "freeze", "crash", "bsod", "band", "nahi chal", "not working", "fail", "error", "disconnect", "drop"]
-        if domain or any(w in norm for w in trouble_indicators):
-            return IntentResult(IntentType.TROUBLESHOOTING_REQUEST, 0.85, domain=domain, normalized_query=norm)
+                return IntentResult(IntentType.ACTION_REQUEST, 0.90, domain=resolved_domain, normalized_query=norm)
 
         # Default fallback
-        return IntentResult(IntentType.TECHNICAL_EXPLANATION, 0.70, domain=domain, normalized_query=norm)
+        if resolved_domain:
+            return IntentResult(IntentType.TROUBLESHOOTING_REQUEST, 0.75, domain=resolved_domain, normalized_query=norm)
+
+        return IntentResult(IntentType.ACTION_REQUEST, 0.60, domain=None, normalized_query=norm)

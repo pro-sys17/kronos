@@ -54,6 +54,20 @@ class HinglishProcessor:
             "earphone", "aawaz", "awaaz", "sound nahi aa rahi", "aawaz nahi aa rahi",
             "speaker band hai", "sound crackle", "audio mute"
         ],
+        "media": [
+            "spotify", "youtube", "music", "song", "gaana", "gana", "play", "track",
+            "album", "artist", "pause", "resume", "chalao", "bajaao", "bajana", "chala do",
+            "song play", "gana play"
+        ],
+        "software": [
+            "git", "github", "clone", "repo", "repository", "install", "pip", "npm",
+            "cli", "tool", "zip", "extract", "setup", "download", "go build", "build",
+            "compile", "package", "wheel", "tar", "tar.gz"
+        ],
+        "browser": [
+            "chrome", "edge", "firefox", "browser", "open link", "website", "url",
+            "tab", "pornhub", "reddit", "netflix", "google", "web"
+        ],
         "performance": [
             "slow", "lag", "hang", "freeze", "cpu", "ram", "memory", "100%", "stuck",
             "laptop garam", "overheating", "fan", "speed up", "task manager", "heavy",
@@ -102,18 +116,48 @@ class HinglishProcessor:
         return None
 
     @classmethod
+    def extract_recent_entity(cls, history: Optional[List[Dict[str, Any]]]) -> Optional[str]:
+        """
+        Extracts recent specific named entities (GitHub repo name, software name, or URL)
+        from recent conversation history turns.
+        """
+        if not history:
+            return None
+
+        for turn in reversed(history[-6:]):
+            content = turn.get("content", "")
+            # Check for GitHub repo URL: https://github.com/user/repo(.git)?
+            gh_match = re.search(r'github\.com/[^/\s]+/([^/\s\.]+)(?:\.git)?', content, re.IGNORECASE)
+            if gh_match:
+                return gh_match.group(1).strip()
+
+            # Check for explicit tool or software names
+            tool_match = re.search(r'\b(spotify-cli|spotify_cli|spotify|chrome|vlc|discord|vscode|code)\b', content, re.IGNORECASE)
+            if tool_match:
+                return tool_match.group(1).strip()
+
+            # Check for directory paths like C:\Temp\... or C:\Users\...
+            path_match = re.search(r'([a-zA-Z]:\\[^\s"\'<>|]+)', content)
+            if path_match:
+                return path_match.group(1).strip()
+
+        return None
+
+    @classmethod
     def resolve_pronoun_reference(cls, text: str, history: Optional[List[Dict[str, Any]]] = None) -> Tuple[str, Optional[str]]:
         """
-        Resolves pronouns like 'ise', 'isko', 'use', 'it', 'this' based on recent conversation history.
-        Example:
-          User: 'Mera audio band ho gaya'
-          Next: 'Ab ise fix karo' -> returns ('Ab audio fix karo', 'audio')
+        Resolves pronouns like 'ise', 'isko', 'use', 'it', 'this' as well as follow-up queries
+        like 'hogai kya', 'kaha he cmds', 'use kese kre' based on recent conversation history.
         """
         norm = cls.normalize_text(text)
         has_pronoun = bool(re.search(r'\b(ise|isko|isey|use|usko|it|this|that|problem|issue)\b', norm))
+        is_follow_up = bool(re.search(r'\b(hogai\s+kya|ho\s+gaya\s+kya|ho\s+gya\s+kya|hua\s+kya|kya\s+hua|kaha\s+he|kaha\s+hai|cmds\s+batao|commands\s+batao|how\s+to\s+use|use\s+kese\s+kre|kaise\s+use\s+kare|run\s+it|show\s+nahi\s+ho\s+rahe)\b', norm))
 
-        if not has_pronoun or not history:
-            return text, cls.detect_domain(text)
+        recent_entity = cls.extract_recent_entity(history) if history else None
+
+        if not (has_pronoun or is_follow_up) or not history:
+            detected = cls.detect_domain(text)
+            return text, detected
 
         # Look back through recent history for previous domain
         last_domain = None
@@ -124,9 +168,15 @@ class HinglishProcessor:
                 last_domain = found_domain
                 break
 
+        # Context augmentation
+        context_parts = []
+        if recent_entity:
+            context_parts.append(f"entity: {recent_entity}")
         if last_domain:
-            # Augment text with the inferred domain context
-            augmented_text = f"{text} (context: {last_domain})"
-            return augmented_text, last_domain
+            context_parts.append(f"domain: {last_domain}")
+
+        if context_parts:
+            augmented_text = f"{text} (context: {', '.join(context_parts)})"
+            return augmented_text, (last_domain or "software")
 
         return text, cls.detect_domain(text)
