@@ -4564,6 +4564,12 @@ class AIBrain:
 
 
 
+        now_init = time.time()
+        # Auto-reset circuit breakers if all models are in cooldown to prevent 15+ minute lockouts
+        if all(self._CIRCUIT_BREAKER_UNTIL.get(m, 0) > now_init for m in self.groq_models):
+            print("[CIRCUIT-BREAKER] All models in cooldown; auto-resetting circuit breakers to attempt recovery...")
+            self._CIRCUIT_BREAKER_UNTIL.clear()
+
         for model in self.groq_models:
 
             now = time.time()
@@ -4648,9 +4654,11 @@ class AIBrain:
 
                         if retry_after > 60.0:
 
-                            self._CIRCUIT_BREAKER_UNTIL[model] = time.time() + retry_after
+                            # Cap maximum cooldown at 30 seconds so transient rate limit bursts don't disable the system
+                            cooldown = min(retry_after, 30.0)
+                            self._CIRCUIT_BREAKER_UNTIL[model] = time.time() + cooldown
 
-                            print(f"[CIRCUIT-BREAKER] Tripping circuit breaker for {model} for {retry_after:.0f}s (quota exhausted). Failing over immediately...")
+                            print(f"[CIRCUIT-BREAKER] Tripping circuit breaker for {model} for {cooldown:.0f}s (quota exhausted). Failing over immediately...")
 
                             last_error = RuntimeError(f"Groq 429 quota exhausted on {model}")
 
