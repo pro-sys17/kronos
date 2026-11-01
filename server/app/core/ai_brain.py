@@ -26,13 +26,50 @@ You must prioritize:
      Directly generate the exact, production-grade PowerShell command in `actions: [{"description": "...", "command": "..."}]`!
    - Keep `summary` to AT MOST ONE ultra-short, crisp line in natural Hinglish/English (e.g. "Bhai, ye rahe established ports:" or "Display driver refresh kar diya gaya.") or leave it blank so the Live System Output takes the spotlight!
    - Let the Live System Output speak for itself.
-   - When Professor asks to open a Windows GUI tool or Control Panel applet (e.g. "net user ka gui open karo", "power option ka gui open karo"):
+   - When Professor asks to open a Windows GUI tool or Control Panel applet (e.g. "net user ka gui open karo", "shutdown ka gui open karo", "sound settings kholo"):
      Use `Start-Process <tool>`!
-     - User Accounts / Net User GUI: `Start-Process lusrmgr.msc` or `Start-Process netplwiz`
+     - User Accounts / Net User GUI: `Start-Process netplwiz` or `Start-Process lusrmgr.msc`
+     - Remote / Shutdown GUI Dialog: `Start-Process shutdown.exe -ArgumentList '/i'`
      - Power Options GUI: `Start-Process powercfg.cpl`
-     - Network Adapters GUI: `Start-Process ncpa.cpl`
+     - Network Connections GUI: `Start-Process ncpa.cpl`
      - Device Manager GUI: `Start-Process devmgmt.msc`
-     - Services GUI: `Start-Process services.msc`
+     - Services Console: `Start-Process services.msc`
+     - Disk Management GUI: `Start-Process diskmgmt.msc`
+     - Computer Management GUI: `Start-Process compmgmt.msc`
+     - Sound Properties GUI: `Start-Process mmsys.cpl`
+     - Mouse Properties GUI: `Start-Process main.cpl`
+     - Game Controllers / Gamepad GUI: `Start-Process joy.cpl`
+     - Advanced System Properties: `Start-Process systempropertiesadvanced`
+     - Hardware Properties: `Start-Process systempropertieshardware`
+     - System Protection / Restore: `Start-Process systempropertiesprotection`
+     - Remote Desktop Settings: `Start-Process systempropertiesremote`
+     - Computer Name Settings: `Start-Process systempropertiescomputername`
+     - System Properties GUI: `Start-Process sysdm.cpl`
+     - Programs and Features (Add/Remove): `Start-Process appwiz.cpl`
+     - Date and Time GUI: `Start-Process timedate.cpl`
+     - Region & Language Formats: `Start-Process intl.cpl`
+     - Internet Options / Proxy GUI: `Start-Process inetcpl.cpl`
+     - Windows Defender Firewall: `Start-Process firewall.cpl`
+     - Advanced Security Firewall: `Start-Process wf.msc`
+     - Security and Maintenance: `Start-Process wscui.cpl`
+     - Add Hardware Wizard: `Start-Process hdwwiz.cpl`
+     - System Information GUI: `Start-Process msinfo32`
+     - DirectX Diagnostic Tool: `Start-Process dxdiag`
+     - Windows Version Dialog: `Start-Process winver`
+     - System Configuration: `Start-Process msconfig`
+     - Resource Monitor: `Start-Process resmon`
+     - Performance Monitor: `Start-Process perfmon`
+     - Event Viewer: `Start-Process eventvwr.msc`
+     - Task Scheduler: `Start-Process taskschd.msc`
+     - Group Policy Editor: `Start-Process gpedit.msc`
+     - Local Security Policy: `Start-Process secpol.msc`
+     - Certificates Manager: `Start-Process certmgr.msc`
+     - Shared Folders GUI: `Start-Process fsmgmt.msc`
+     - Registry Editor: `Start-Process regedit.exe`
+     - Disk Cleanup GUI: `Start-Process cleanmgr.exe`
+     - Defragmenter / Drive Optimizer: `Start-Process dfrgui.exe`
+     - Task Manager: `Start-Process taskmgr.exe`
+     - Control Panel: `Start-Process control.exe`
    - When Professor asks to filter or inspect a specific app's ports (e.g. "filter spotify port"):
      Query that process's network connections:
      `Get-Process -Name 'spotify*' -ErrorAction SilentlyContinue | ForEach-Object { Get-NetTCPConnection -OwningProcess $_.Id -ErrorAction SilentlyContinue } | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | Format-Table -AutoSize`
@@ -609,6 +646,161 @@ class AIBrain:
 
         return None
 
+
+
+    def _check_gui_request(self, problem: str) -> Optional[Dict[str, Any]]:
+        """
+        Instant 0ms resolution for Windows GUI commands, applets (.cpl), consoles (.msc),
+        and master categorized GUI tool inquiries. Prevents rate-limit exhaustion and ensures
+        lightning-fast desktop management.
+        """
+        p = problem.strip().lower()
+
+        # 1. Master Categorized GUI List Request
+        listing_keywords = [
+            "sare gui cmd", "saare gui cmd", "sari gui cmd", "all gui cmd",
+            "list all gui", "kitne gui cmd", "kitne popup cmd", "gui commands list",
+            "show all gui", "sare popup cmd", "master list"
+        ]
+        if any(k in p for k in listing_keywords):
+            return {
+                "issue_id": "SYS-GUI-LIST",
+                "root_cause": "User requested master list of all Windows GUI commands",
+                "intent": "TECHNICAL_EXPLANATION",
+                "risk_level": "LOW",
+                "risk_color": "GREEN",
+                "summary": (
+                    "Available Windows GUI Commands (Categorized Master List):\n\n"
+                    "1. System Information & Diagnostics:\n"
+                    "  - msinfo32 (System Information)\n"
+                    "  - dxdiag (DirectX Diagnostic Tool)\n"
+                    "  - winver (About Windows / Version)\n"
+                    "  - msconfig (System Configuration)\n"
+                    "  - sysdm.cpl (System Properties)\n"
+                    "  - systempropertiesadvanced (Advanced System Properties)\n"
+                    "  - systempropertieshardware (Hardware Properties)\n"
+                    "  - systempropertiesprotection (System Protection / Restore)\n"
+                    "  - systempropertiesremote (Remote Desktop Settings)\n"
+                    "  - systempropertiescomputername (Computer Name)\n"
+                    "  - perfmon (Performance Monitor)\n"
+                    "  - resmon (Resource Monitor)\n"
+                    "  - eventvwr.msc (Event Viewer)\n\n"
+                    "2. Control Panel Applets (.cpl):\n"
+                    "  - appwiz.cpl (Programs and Features / Uninstall)\n"
+                    "  - mmsys.cpl (Sound Settings & Devices)\n"
+                    "  - main.cpl (Mouse Properties)\n"
+                    "  - joy.cpl (Game Controllers / USB Gamepad)\n"
+                    "  - desk.cpl (Display Settings)\n"
+                    "  - timedate.cpl (Date and Time)\n"
+                    "  - intl.cpl (Region & Language)\n"
+                    "  - ncpa.cpl (Network Connections)\n"
+                    "  - inetcpl.cpl (Internet Properties / Proxy)\n"
+                    "  - powercfg.cpl (Power Options)\n"
+                    "  - firewall.cpl (Windows Defender Firewall)\n"
+                    "  - wscui.cpl (Security and Maintenance)\n"
+                    "  - hdwwiz.cpl (Add Hardware Wizard)\n"
+                    "  - telephon.cpl (Phone and Modem)\n\n"
+                    "3. Management Consoles (.msc):\n"
+                    "  - compmgmt.msc (Computer Management)\n"
+                    "  - devmgmt.msc (Device Manager)\n"
+                    "  - diskmgmt.msc (Disk Management)\n"
+                    "  - services.msc (Services)\n"
+                    "  - taskschd.msc (Task Scheduler)\n"
+                    "  - gpedit.msc (Local Group Policy Editor)\n"
+                    "  - secpol.msc (Local Security Policy)\n"
+                    "  - lusrmgr.msc (Local Users and Groups)\n"
+                    "  - certmgr.msc (Certificate Manager)\n"
+                    "  - wf.msc (Firewall with Advanced Security)\n"
+                    "  - fsmgmt.msc (Shared Folders)\n\n"
+                    "4. Utilities & Popup Dialogs:\n"
+                    "  - shutdown /i (Remote / Local Shutdown GUI Dialog)\n"
+                    "  - regedit.exe (Registry Editor)\n"
+                    "  - cleanmgr.exe (Disk Cleanup)\n"
+                    "  - dfrgui.exe (Defragment & Optimize Drives)\n"
+                    "  - taskmgr.exe (Task Manager)\n"
+                    "  - netplwiz (User Accounts)\n"
+                    "  - control.exe (Control Panel)\n"
+                    "  - magnify.exe (Magnifier)\n"
+                    "  - osk.exe (On-Screen Keyboard)"
+                ),
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            }
+
+        # 2. Check Launch Request Intent
+        is_launch_intent = any(w in p for w in ["open", "kholo", "chalu", "start", "launch", "run", "popup open"])
+        if not is_launch_intent:
+            return None
+
+        GUI_MAP = [
+            (["shutdown /i", "shutdown popup", "shutdown gui", "shutdown"], "Start-Process shutdown.exe -ArgumentList '/i'", "Shutdown GUI khol diya gaya."),
+            (["dxdiag", "directx", "direct x"], "Start-Process dxdiag", "DirectX Diagnostic Tool khol diya gaya."),
+            (["msinfo32", "systeminfo gui", "system information gui", "msinfo"], "Start-Process msinfo32", "System Information GUI khol diya gaya."),
+            (["winver", "about windows", "windows version gui"], "Start-Process winver", "Windows Version dialog khol diya gaya."),
+            (["msconfig", "system configuration"], "Start-Process msconfig", "System Configuration GUI khol diya gaya."),
+            (["resmon", "resource monitor"], "Start-Process resmon", "Resource Monitor GUI khol diya gaya."),
+            (["perfmon", "performance monitor"], "Start-Process perfmon", "Performance Monitor GUI khol diya gaya."),
+            (["eventvwr", "event viewer", "events"], "Start-Process eventvwr.msc", "Event Viewer GUI khol diya gaya."),
+            (["mmsys.cpl", "sound settings", "sound popup", "sound properties", "audio settings", "sound options"], "Start-Process mmsys.cpl", "Sound Properties GUI khol diya gaya."),
+            (["main.cpl", "mouse settings", "mouse properties", "mouse popup"], "Start-Process main.cpl", "Mouse Properties GUI khol diya gaya."),
+            (["joy.cpl", "game controller", "gamepad", "joystick", "controller test"], "Start-Process joy.cpl", "Game Controllers GUI khol diya gaya."),
+            (["systempropertiesadvanced", "advanced system properties", "env vars", "environment variables"], "Start-Process systempropertiesadvanced", "Advanced System Properties khol diya gaya."),
+            (["systempropertieshardware", "hardware properties"], "Start-Process systempropertieshardware", "Hardware Properties khol diya gaya."),
+            (["systempropertiesprotection", "system protection", "system restore gui"], "Start-Process systempropertiesprotection", "System Protection Settings khol diya gaya."),
+            (["systempropertiesremote", "remote settings", "remote desktop gui"], "Start-Process systempropertiesremote", "Remote Settings khol diya gaya."),
+            (["systempropertiescomputername", "computer name settings", "workgroup settings"], "Start-Process systempropertiescomputername", "Computer Name Settings khol diya gaya."),
+            (["sysdm.cpl", "system properties", "sysdm"], "Start-Process sysdm.cpl", "System Properties GUI khol diya gaya."),
+            (["appwiz.cpl", "programs and features", "uninstall programs", "add remove programs", "appwiz"], "Start-Process appwiz.cpl", "Programs and Features GUI khol diya gaya."),
+            (["timedate.cpl", "date time", "date and time", "time settings popup", "timedate"], "Start-Process timedate.cpl", "Date and Time GUI khol diya gaya."),
+            (["intl.cpl", "region settings", "language format", "intl"], "Start-Process intl.cpl", "Region & Language Settings khol diya gaya."),
+            (["ncpa.cpl", "network connections", "network adapters gui", "ncpa"], "Start-Process ncpa.cpl", "Network Connections GUI khol diya gaya."),
+            (["inetcpl.cpl", "internet options", "internet properties", "proxy gui", "inetcpl"], "Start-Process inetcpl.cpl", "Internet Properties GUI khol diya gaya."),
+            (["powercfg.cpl", "power options", "power option", "sleep settings", "power plans"], "Start-Process powercfg.cpl", "Power Options GUI khol diya gaya."),
+            (["firewall.cpl", "windows firewall", "firewall gui"], "Start-Process firewall.cpl", "Windows Firewall GUI khol diya gaya."),
+            (["wf.msc", "advanced firewall", "firewall advanced"], "Start-Process wf.msc", "Advanced Security Firewall khol diya gaya."),
+            (["wscui.cpl", "security and maintenance", "action center"], "Start-Process wscui.cpl", "Security and Maintenance GUI khol diya gaya."),
+            (["hdwwiz.cpl", "add hardware", "device wizard"], "Start-Process hdwwiz.cpl", "Add Hardware Wizard khol diya gaya."),
+            (["diskmgmt.msc", "disk management", "disk partitions gui", "diskmgmt"], "Start-Process diskmgmt.msc", "Disk Management GUI khol diya gaya."),
+            (["devmgmt.msc", "device manager", "devmgmt"], "Start-Process devmgmt.msc", "Device Manager GUI khol diya gaya."),
+            (["services.msc", "services gui", "services console", "services list gui"], "Start-Process services.msc", "Services Console khol diya gaya."),
+            (["compmgmt.msc", "computer management", "compmgmt"], "Start-Process compmgmt.msc", "Computer Management GUI khol diya gaya."),
+            (["taskschd.msc", "task scheduler", "taskschd"], "Start-Process taskschd.msc", "Task Scheduler GUI khol diya gaya."),
+            (["gpedit.msc", "group policy", "gpedit"], "Start-Process gpedit.msc", "Group Policy Editor khol diya gaya."),
+            (["secpol.msc", "security policy", "secpol"], "Start-Process secpol.msc", "Local Security Policy khol diya gaya."),
+            (["lusrmgr.msc", "local users", "lusrmgr"], "Start-Process lusrmgr.msc", "Local Users and Groups khol diya gaya."),
+            (["netplwiz", "user accounts gui", "net user gui", "net user ka gui"], "Start-Process netplwiz", "User Accounts GUI khol diya gaya."),
+            (["certmgr.msc", "certificates", "certmgr"], "Start-Process certmgr.msc", "Certificates Manager khol diya gaya."),
+            (["fsmgmt.msc", "shared folders", "fsmgmt"], "Start-Process fsmgmt.msc", "Shared Folders GUI khol diya gaya."),
+            (["regedit", "regedit.exe", "registry editor"], "Start-Process regedit.exe", "Registry Editor khol diya gaya."),
+            (["cleanmgr", "cleanmgr.exe", "disk cleanup"], "Start-Process cleanmgr.exe", "Disk Cleanup GUI khol diya gaya."),
+            (["dfrgui", "dfrgui.exe", "defragmenter", "optimize drives"], "Start-Process dfrgui.exe", "Drive Optimizer GUI khol diya gaya."),
+            (["taskmgr", "taskmgr.exe", "task manager"], "Start-Process taskmgr.exe", "Task Manager GUI khol diya gaya."),
+            (["control", "control.exe", "control panel"], "Start-Process control.exe", "Control Panel khol diya gaya."),
+            (["magnify", "magnify.exe", "magnifier"], "Start-Process magnify.exe", "Magnifier khol diya gaya."),
+            (["osk", "osk.exe", "on screen keyboard"], "Start-Process osk.exe", "On-Screen Keyboard khol diya gaya.")
+        ]
+
+        for aliases, cmd, summary_text in GUI_MAP:
+            for alias in aliases:
+                if re.search(r'\b' + re.escape(alias) + r'\b', p) or alias in p:
+                    return {
+                        "issue_id": "SYS-GUI-LAUNCH",
+                        "root_cause": f"User requested to launch Windows GUI tool: {alias}",
+                        "intent": "ACTION_REQUEST",
+                        "risk_level": "LOW",
+                        "risk_color": "GREEN",
+                        "summary": summary_text,
+                        "actions": [{
+                            "description": f"Launch {alias}",
+                            "command": cmd
+                        }],
+                        "selected_tools": [],
+                        "verification_command": "$true",
+                        "requires_confirmation": False
+                    }
+        return None
 
 
     def _check_tui_request(self, problem: str) -> Optional[Dict[str, Any]]:
@@ -3933,6 +4125,11 @@ class AIBrain:
             if fast_plan:
                 return _finalize_and_record(fast_plan)
 
+        # Step 5: Direct Windows GUI Applet Launch & Master List Resolution
+        gui_plan = self._check_gui_request(resolved_problem)
+        if gui_plan:
+            return _finalize_and_record(gui_plan)
+
         # Step 6: Query AI Providers or Fallback
 
         plan: Optional[Dict[str, Any]] = None
@@ -4001,6 +4198,59 @@ class AIBrain:
 
                 # Online AI Only - No fake offline fallback playbooks
         if not plan:
+            if intent == "GREETING_CHITCHAT":
+                return _finalize_and_record({
+                    "issue_id": "SYS-CHITCHAT",
+                    "root_cause": "Greeting or casual chatter",
+                    "intent": "GREETING_CHITCHAT",
+                    "risk_level": "LOW",
+                    "risk_color": "CYAN",
+                    "summary": "Hello Professor! Kaise ho bhai? Main KRONOS hoon, aapka autonomous Windows Co-Pilot. Batao aaj kya check ya control karna hai?",
+                    "actions": [],
+                    "selected_tools": [],
+                    "verification_command": "$true",
+                    "requires_confirmation": False
+                })
+            elif intent == "AMBIGUOUS_QUERY":
+                return _finalize_and_record({
+                    "issue_id": "SYS-AMBIGUOUS",
+                    "root_cause": "User query lacks specific system target",
+                    "intent": "AMBIGUOUS_QUERY",
+                    "risk_level": "LOW",
+                    "risk_color": "CYAN",
+                    "summary": "Bhai, query thodi unclear lag rahi hai. Aap kya diagnose ya fix karna chahte ho? Jaise ki: internet speed, open ports, high RAM/CPU usage, ya disk cleanup?",
+                    "actions": [],
+                    "selected_tools": [],
+                    "verification_command": "$true",
+                    "requires_confirmation": False
+                })
+            elif intent == "ACKNOWLEDGMENT":
+                return _finalize_and_record({
+                    "issue_id": "SYS-ACK",
+                    "root_cause": "User acknowledgment",
+                    "intent": "ACKNOWLEDGMENT",
+                    "risk_level": "LOW",
+                    "risk_color": "GREEN",
+                    "summary": "Badhiya bhai! Sab theek se ho gaya. Agla task ya query ho toh batao!",
+                    "actions": [],
+                    "selected_tools": [],
+                    "verification_command": "$true",
+                    "requires_confirmation": False
+                })
+            elif intent == "CANCELLATION":
+                return _finalize_and_record({
+                    "issue_id": "SYS-CANCEL",
+                    "root_cause": "User cancellation",
+                    "intent": "CANCELLATION",
+                    "risk_level": "LOW",
+                    "risk_color": "CYAN",
+                    "summary": "Theek hai bhai, operation cancel kar diya gaya hai. Mast chill karo!",
+                    "actions": [],
+                    "selected_tools": [],
+                    "verification_command": "$true",
+                    "requires_confirmation": False
+                })
+
             return _finalize_and_record({
                 "issue_id": "SYS-AI-UNREACHABLE",
                 "root_cause": "AI inference provider unreachable",

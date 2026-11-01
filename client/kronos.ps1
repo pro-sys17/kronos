@@ -2193,6 +2193,9 @@ function Start-ConversationMode($initialPrompt = $null) {
         if ([string]::IsNullOrWhiteSpace($prompt)) {
             continue
         }
+        if ($prompt -match '^\s*\|\s*[-:\s|]+\|\s*$' -or $prompt -match '^\s*\|\s*Command\s*\|' -or $prompt -match '^\s*##\s*\d+\.\s*') {
+            continue
+        }
 
         $pLower = $prompt.Trim().ToLower()
 
