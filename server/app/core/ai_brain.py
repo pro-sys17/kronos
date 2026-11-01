@@ -41,9 +41,18 @@ You must prioritize:
    - Display Driver Reset ("display drivers ko refresh karde"):
      `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^#{b}'); Write-Host 'Display driver reset signal dispatched.'`
 
-5. FOLLOW-UP & CHAINED CONTEXT EXECUTION:
-   - If the previous turn showed ports or processes, and Professor says "sare establish ports filter kro" or "i mean just print":
-     He wants to see the filtered established ports right now! Generate the established connections command immediately. NEVER switch to unrelated CPU/RAM inspection or say you are running an offline playbook!
+5. FOLLOW-UP & REFINEMENT HANDLING:
+   - When Professor says "in detail", "aur detail me", "details do", or "expand":
+     If referring to previous output (like open ports, processes, services, disks):
+     ALWAYS generate an enriched PowerShell command with process names or detailed properties!
+     For ports in detail:
+     `Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess, @{Name='ProcessName';Expression={(Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue).ProcessName}} | Format-Table -AutoSize`
+   - When Professor says "kuch nahi aya output", "kuch nahi dikha", or reports missing output:
+     Understand that the previous output was empty or missing. IMMEDIATELY re-execute the appropriate command to display the requested data! NEVER say "chill karo" or treat it as a cancellation!
+   - When Professor asks for "open ports print kr" or "ports dikhao":
+     `Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, OwningProcess | Format-Table -AutoSize`
+   - When Professor asks for "filter established ports" or "sare establish ports filter kro":
+     `Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, RemoteAddress, RemotePort, State, OwningProcess | Format-Table -AutoSize`
 
 6. CONCEPTUAL QUERIES ONLY:
    - Provide technical explanations, comparisons, or markdown tables ONLY when Professor explicitly asks conceptual questions (e.g. "DNS kya hota hai", "NTFS vs exFAT difference", "explain TCP handshake").
@@ -3867,13 +3876,7 @@ class AIBrain:
 
 
 
-        # Step 4: Handle conversational, chit-chat, cancellations, & ambiguities immediately
-
-        chat_plan = self._check_conversational_query(resolved_problem)
-
-        if chat_plan:
-
-            return _finalize_and_record(chat_plan)
+        # Step 4: Conversational/Ambiguity handling delegated to online LLM
 
 
 
@@ -4141,11 +4144,20 @@ class AIBrain:
 
 
 
-        # Fallback: Deterministic Local Expert Engine
-
+                # Online AI Only - No fake offline fallback playbooks
         if not plan:
-
-            plan = self._local_expert_engine(resolved_problem, telemetry)
+            return _finalize_and_record({
+                "issue_id": "SYS-AI-UNREACHABLE",
+                "root_cause": "AI inference provider unreachable",
+                "intent": "SYSTEM_INFO_REQUEST",
+                "risk_level": "LOW",
+                "risk_color": "RED",
+                "summary": "Bhai, online AI provider (Groq/Gemini) connect nahi ho pa raha hai. Kripya apna internet connection aur API keys check karein.",
+                "actions": [],
+                "selected_tools": [],
+                "verification_command": "$true",
+                "requires_confirmation": False
+            })
 
 
 
