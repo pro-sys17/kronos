@@ -130,6 +130,15 @@ async def serve_bootstrap(request: Request):
 
     return Response(content=modified_content, media_type="text/plain; charset=utf-8")
 
+
+@router.get("/api/v1/session")
+async def get_session():
+    """
+    Returns an ephemeral cryptographically signed session token for local/CLI clients.
+    """
+    token = SecurityManager.generate_session_token()
+    return {"status": "SUCCESS", "session_token": token}
+
 @router.post("/api/v1/diagnose")
 async def diagnose_problem(req: DiagnoseRequest, request: Request, x_session_token: Optional[str] = Header(None)):
     """
